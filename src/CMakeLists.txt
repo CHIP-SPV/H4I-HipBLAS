@@ -35,10 +35,41 @@ target_include_directories(H4I-HipBLAS
 		$<INSTALL_INTERFACE:include>)
 
 target_link_libraries(H4I-HipBLAS
-    PUBLIC
+	PRIVATE
         H4I-HipBLASCommonConfig
+
+    PUBLIC
 		hip::host
         H4I::MKLShim
     )
 
+# Specify how to install the library.
+include (GNUInstallDirs)
+install(TARGETS H4I-HipBLAS
+		EXPORT HipBLAS
+)
+install(FILES
+			${CMAKE_BINARY_DIR}/include/hipblas.h
+			${CMAKE_BINARY_DIR}/include/hipblas-version.h
+			${CMAKE_SOURCE_DIR}/include/hipblas-export.h
+		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/
+)
+
+install(EXPORT HipBLAS
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/H4I-HipBLAS
+	NAMESPACE H4I::
+)
+
+include(CMakePackageConfigHelpers)
+
+configure_package_config_file(${CMAKE_SOURCE_DIR}/CMake/H4I-HipBLASConfig.cmake.in
+	${CMAKE_CURRENT_BINARY_DIR}/H4I-HipBLASConfig.cmake
+	PATH_VARS CMAKE_INSTALL_INCLUDEDIR
+	INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/H4I-HipBLAS
+)
+
+install(FILES
+	${CMAKE_CURRENT_BINARY_DIR}/H4I-HipBLASConfig.cmake
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/H4I-HipBLAS
+)
 
