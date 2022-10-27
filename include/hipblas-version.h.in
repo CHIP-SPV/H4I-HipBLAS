@@ -1,0 +1,9 @@
+// Copyright 2021-2022 UT-Battelle
+// See LICENSE.txt in the root of the source distribution for license info.
+#pragma once
+
+#define hipblasVersionMajor @PROJECT_VERSION_MAJOR@
+#define hipblasVersionMinor @PROJECT_VERSION_MINOR@
+#define hipblasVersionPatch @PROJECT_VERSION_PATCH@
+#define hipblasVersionTweak 0	// We don't use a tweak.
+
