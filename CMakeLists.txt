@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
+include (${CMAKE_SOURCE_DIR}/CMake/HipBLASVersion.cmake)
 project(H4I-HipBLAS
-    VERSION 0.1.0
+    VERSION ${HipBLAS_VERSION}
     LANGUAGES CXX)
 
 # We will use HIP in some fashion, no matter which platform
