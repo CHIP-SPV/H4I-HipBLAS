@@ -26,6 +26,7 @@ configure_file(
 
 # Specify how to build the library.
 add_library(HipBLAS SHARED
+    util.cpp
     sgemm.cpp)
 target_include_directories(HipBLAS
 	PUBLIC
