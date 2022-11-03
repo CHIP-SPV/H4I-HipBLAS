@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
 include (${CMAKE_SOURCE_DIR}/CMake/HipBLASVersion.cmake)
-project(H4I-HipBLAS
+project(HipBLAS
     VERSION ${HipBLAS_VERSION}
     LANGUAGES CXX)
+
 
 # We will use HIP in some fashion, no matter which platform
 # we're targeting or what parts of the software we're building.
@@ -12,20 +13,28 @@ find_package(HIP REQUIRED)
 # fails to enable support for HIP as a first class language.
 #enable_language(HIP)
 
-# Define a target capturing common compiler configuration.
+# Ensure our users and installed tests will be able to find our
+# dependency libraries.
+include(GNUInstallDirs)
+file(RELATIVE_PATH relRPath
+        ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}
+        ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}
+    )
+set(CMAKE_INSTALL_RPATH $ORIGIN $ORIGIN/${relRPath})
+
+# Define a target capturing common configuration settings.
 # Although we use 'add_library' for this, it is not a library - 
 # just a CMake target with a collection of properties set the
 # way we want.
-# Unfortunately, it doesn't seem to be possible to set some
-# of the C++ standards-related properties on this target
-# and have it inherited by targets that "link" from it.
-# We have to set the global variables that those target
-# properties default to, or set them explicitly on the
-# actual targets themselves with set_target_properties.
+# Unfortunately, it doesn't seem to be possible to set all
+# of the properties we want on this target and have them
+# be inherited by targets that "link" it.
+# In particular, we can't set a few C++ standards properties
+# and so either have to set them globally or on every target.
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-add_library(H4I-HipBLASCommonConfig INTERFACE)
-target_compile_features(H4I-HipBLASCommonConfig
+add_library(HipBLASCommonConfig INTERFACE)
+target_compile_features(HipBLASCommonConfig
     INTERFACE
         cxx_std_17
     )
@@ -43,8 +52,8 @@ if(NOT H4I_USE_ROCM_HIPBLAS)
 endif()
 
 # Build tests if desired.
-option(H4I_BUILD_TESTS "Whether to build test programs." ON)
-if(H4I_BUILD_TESTS)
+include(CTest)
+if(BUILD_TESTING)
     add_subdirectory(test)
 endif()
 

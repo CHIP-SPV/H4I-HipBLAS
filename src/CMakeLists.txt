@@ -1,6 +1,6 @@
 
 # We rely on the MKL shim library.
-find_package(H4I-MKLShim REQUIRED)
+find_package(MKLShim REQUIRED)
 
 # To aid portability between our implementation and
 # the ROCm hipBLAS implementation, we use the ROCm
@@ -25,51 +25,48 @@ configure_file(
     @ONLY)
 
 # Specify how to build the library.
-add_library(H4I-HipBLAS SHARED
+add_library(HipBLAS SHARED
     sgemm.cpp)
-target_include_directories(H4I-HipBLAS
-	PRIVATE
-		${CMAKE_SOURCE_DIR}/include
+target_include_directories(HipBLAS
 	PUBLIC
-		$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+        "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include;${CMAKE_BINARY_DIR}/include>"
 		$<INSTALL_INTERFACE:include>)
 
-target_link_libraries(H4I-HipBLAS
+target_link_libraries(HipBLAS
 	PRIVATE
-        H4I-HipBLASCommonConfig
-
+        HipBLASCommonConfig
+        H4I::MKLShim
     PUBLIC
 		hip::host
-        H4I::MKLShim
     )
 
 # Specify how to install the library.
 include (GNUInstallDirs)
-install(TARGETS H4I-HipBLAS
+install(TARGETS HipBLAS
 		EXPORT HipBLAS
 )
 install(FILES
 			${CMAKE_BINARY_DIR}/include/hipblas.h
 			${CMAKE_BINARY_DIR}/include/hipblas-version.h
 			${CMAKE_SOURCE_DIR}/include/hipblas-export.h
-		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/
+        TYPE INCLUDE
 )
 
 install(EXPORT HipBLAS
-	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/H4I-HipBLAS
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
 	NAMESPACE H4I::
 )
 
 include(CMakePackageConfigHelpers)
 
-configure_package_config_file(${CMAKE_SOURCE_DIR}/CMake/H4I-HipBLASConfig.cmake.in
-	${CMAKE_CURRENT_BINARY_DIR}/H4I-HipBLASConfig.cmake
+configure_package_config_file(${CMAKE_SOURCE_DIR}/CMake/HipBLASConfig.cmake.in
+	${CMAKE_CURRENT_BINARY_DIR}/HipBLASConfig.cmake
 	PATH_VARS CMAKE_INSTALL_INCLUDEDIR
-	INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/H4I-HipBLAS
+	INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
 )
 
 install(FILES
-	${CMAKE_CURRENT_BINARY_DIR}/H4I-HipBLASConfig.cmake
-	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/H4I-HipBLAS
+	${CMAKE_CURRENT_BINARY_DIR}/HipBLASConfig.cmake
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
 )
 

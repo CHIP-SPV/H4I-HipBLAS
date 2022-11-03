@@ -1,8 +1,11 @@
 
 @PACKAGE_INIT@
 
+include(CMakeFindDependencyMacro)
+find_dependency(MKLShim)
+
 include ( "${CMAKE_CURRENT_LIST_DIR}/HipBLAS.cmake" )
 set_and_check(H4I_HipBLAS_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
 set(H4I_HipBLAS_LIBRARIES H4I::HipBLAS)
-check_required_components(H4I-HipBLAS)
+check_required_components(HipBLAS)
 
