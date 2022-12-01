@@ -12,7 +12,7 @@ hipblasCreate(hipblasHandle_t* handle)
     {
         *handle = H4I::MKLShim::Create();
     }
-    return (handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
+    return (*handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
 }
 
 hipblasStatus_t
@@ -20,7 +20,7 @@ hipblasDestroy(hipblasHandle_t handle)
 {
     if(handle != nullptr)
     {
-        H4I::MKLShim::Context* ctxt = *(static_cast<H4I::MKLShim::Context**>(handle));
+        H4I::MKLShim::Context* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
         H4I::MKLShim::Destroy(ctxt);
     }
     return (handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
@@ -31,7 +31,7 @@ hipblasSetStream(hipblasHandle_t handle, hipStream_t stream)
 {
     if(handle != nullptr)
     {
-        H4I::MKLShim::Context* ctxt = *(static_cast<H4I::MKLShim::Context**>(handle));
+        H4I::MKLShim::Context* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
 
         // Obtain the underlying CHIP-SPV handles.
         // Note this code uses a CHIP-SPV extension to the HIP API.
