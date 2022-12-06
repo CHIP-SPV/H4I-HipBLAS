@@ -1,3 +1,5 @@
+// Copyright 2021-2022 UT-Battelle
+// See LICENSE.txt in the root of the source distribution for license info.
 #include <iostream>
 #include "hip/hip_runtime.h"	// Necessary for CHIP-SPV implementation.
 #include "hipblas.h"
