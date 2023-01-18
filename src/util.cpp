@@ -5,14 +5,18 @@
 #include "hip/hip_interop.h"	// Necessary for CHIP-SPV implementation.
 #include "hipblas.h"
 #include "h4i/mklshim/mklshim.h"
-#include "h4i/hipblas/impl/Operation.h"
+#include "h4i/hipblas/impl/util.h"
 
 hipblasStatus_t
 hipblasCreate(hipblasHandle_t* handle)
 {
     if(handle != nullptr)
     {
-        *handle = H4I::MKLShim::Create();
+        // Obtain the handles to the LZ handlers.
+        unsigned long lzHandles[4];
+        int           nHandles = 4;
+        hipGetBackendNativeHandles((uintptr_t)NULL, lzHandles, &nHandles);
+        *handle = H4I::MKLShim::Create(lzHandles, nHandles);
     }
     return (*handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
 }

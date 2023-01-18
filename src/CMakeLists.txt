@@ -29,7 +29,8 @@ configure_file(
 # Specify how to build the library.
 add_library(HipBLAS SHARED
     util.cpp
-    sgemm.cpp)
+    sgemm.cpp
+    hipblas.cpp)
 target_include_directories(HipBLAS
 	PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include;${CMAKE_BINARY_DIR}/include>"

@@ -5,6 +5,17 @@
 #include <unordered_map>
 
 inline
+bool isDevicePointer(const void* ptr) {
+    hipPointerAttribute_t attribs;
+    hipError_t hip_status = hipPointerGetAttributes(&attribs, ptr);
+    bool is_result_dev_ptr = true;
+    if (attribs.memoryType != hipMemoryTypeDevice) {
+        is_result_dev_ptr = false;
+    }
+    return is_result_dev_ptr;
+}
+
+inline
 H4I::MKLShim::Operation
 ToMKLShimOp(hipblasOperation_t op)
 {
