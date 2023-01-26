@@ -4,7 +4,7 @@
 #include "hip/hip_runtime.h"	// Necessary for CHIP-SPV implementation.
 #include "hipblas.h"
 #include "h4i/mklshim/mklshim.h"
-#include "h4i/hipblas/impl/Operation.h"
+#include "h4i/hipblas/impl/util.h"
 
 
 hipblasStatus_t
