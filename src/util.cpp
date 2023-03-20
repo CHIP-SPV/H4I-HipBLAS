@@ -18,7 +18,7 @@ hipblasSetPointerMode(hipblasHandle_t handle, hipblasPointerMode_t mode)
     if (handle == nullptr) {
         return HIPBLAS_STATUS_NOT_INITIALIZED;
     }
-    if (mode != HIPBLAS_POINTER_MODE_HOST || mode != HIPBLAS_POINTER_MODE_DEVICE) {
+    if (mode != HIPBLAS_POINTER_MODE_HOST && mode != HIPBLAS_POINTER_MODE_DEVICE) {
         return HIPBLAS_STATUS_INVALID_VALUE;
     }
     POINTER_MODE.store((int)mode);
@@ -43,11 +43,13 @@ hipblasCreate(hipblasHandle_t* handle)
 {
     if(handle != nullptr)
     {
-        // Obtain the handles to the LZ handlers.
-        unsigned long lzHandles[4];
+        // HIP supports mutile backends hence query current backend name
+        auto backendName = hipGetBackendName();
+        // Obtain the handles to the back handlers.
+        unsigned long handles[4];
         int           nHandles = 4;
-        hipGetBackendNativeHandles((uintptr_t)NULL, lzHandles, &nHandles);
-        *handle = H4I::MKLShim::Create(lzHandles, nHandles);
+        hipGetBackendNativeHandles((uintptr_t)NULL, handles, &nHandles);
+        *handle = H4I::MKLShim::Create(handles, nHandles, backendName);
     }
     return (*handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
 }

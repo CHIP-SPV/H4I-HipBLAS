@@ -481,134 +481,183 @@ hipblasStatus_t hipblasIsamax(hipblasHandle_t handle, int n, const float* x, int
   HIPBLAS_TRY
   hipError_t hip_status;
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // Special handling
-  if (n <= 0 || incx <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
+
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  if (x == nullptr) {
+    if (is_result_dev_ptr){
+      hipMemset(result, 0, sizeof(int));
     } else {
       *result = 0;
     }
     return HIPBLAS_STATUS_SUCCESS;
   }
-  // Warning: result is a int* where as amax takes int64_t*
-  int64_t *dev_results = (int64_t*)result;
-  if (!is_result_dev_ptr)
-      hip_status = hipMalloc(&dev_results, sizeof(int64_t));
 
-  H4I::MKLShim::sAmax(ctxt, n, x, incx, (int64_t*)dev_results);
-
-  if (!is_result_dev_ptr) {
-      int64_t results_host_memory = 0;
-      hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
-      //Fix_Me : Chance of data corruption
-      *result = (int)results_host_memory;
-      hip_status = hipFree(&dev_results);
+  // error checks
+  if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
   }
+
+  int64_t *dev_results = nullptr;
+  hip_status = hipMalloc(&dev_results, sizeof(int64_t));
+
+  H4I::MKLShim::sAmax(ctxt, n, x, incx, dev_results);
+
+  // Workaround:
+  // 1. 'return' index in case of oneMKL starts from 0 to (n-1) but others return it as 1 to n hence
+  // handling it below by incrementing it by one
+  // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
+  int64_t results_host_memory = 0;
+  hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  results_host_memory += 1;
+
+  int return_val = (int)results_host_memory;
+  if (is_result_dev_ptr) {
+    hipMemcpy(result, &return_val, sizeof(int), hipMemcpyDefault);
+  } else {
+    *result = return_val;
+  }
+  hip_status = hipFree(&dev_results);
   HIPBLAS_CATCH("AMAX")
 }
+
 hipblasStatus_t hipblasIdamax(hipblasHandle_t handle, int n, const double* x, int incx, int* result){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // Special handling
-  if (n <= 0 || incx <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  if (x == nullptr) {
+    if (is_result_dev_ptr){
+      hipMemset(result, 0, sizeof(int));
     } else {
       *result = 0;
     }
     return HIPBLAS_STATUS_SUCCESS;
   }
-  // Warning: result is a int* where as amax takes int64_t*
-  int64_t *dev_results = (int64_t*)result;
 
-  if (!is_result_dev_ptr) {
-      hip_status = hipMalloc(&dev_results, sizeof(int64_t));
+  // error checks
+  if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
   }
+
+  int64_t *dev_results = nullptr;
+  hip_status = hipMalloc(&dev_results, sizeof(int64_t));
 
   H4I::MKLShim::dAmax(ctxt, n, x, incx, dev_results);
 
-  if (!is_result_dev_ptr) {
-      int64_t results_host_memory = 0;
-      hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  // Workaround:
+  // 1. 'return' index in case of oneMKL starts from 0 to (n-1) but others return it as 1 to n hence
+  // handling it below by incrementing it by one
+  // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
+  int64_t results_host_memory = 0;
+  hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  results_host_memory += 1;
 
-      //Fix_Me : Chance of data corruption
-      *result = (int)results_host_memory;
-
-      hip_status = hipFree(&dev_results);
+  int return_val = (int)results_host_memory;
+  if (is_result_dev_ptr) {
+    hipMemcpy(result, &return_val, sizeof(int), hipMemcpyDefault);
+  } else {
+    *result = return_val;
   }
+  hip_status = hipFree(&dev_results);
   HIPBLAS_CATCH("AMAX")
 }
 
 hipblasStatus_t hipblasIcamax(hipblasHandle_t handle, int n, const hipblasComplex* x, int incx, int* result){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // Special handling
-  if (n <= 0 || incx <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  if (x == nullptr) {
+    if (is_result_dev_ptr){
+      hipMemset(result, 0, sizeof(int));
     } else {
       *result = 0;
     }
     return HIPBLAS_STATUS_SUCCESS;
   }
-  // Warning: result is a int* where as amax takes int64_t*
-  int64_t *dev_results = (int64_t*)result;
 
-  if (!is_result_dev_ptr) {
-      hip_status = hipMalloc(&dev_results, sizeof(int64_t));
+  // error checks
+  if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
   }
+
+  int64_t *dev_results = nullptr;
+  hip_status = hipMalloc(&dev_results, sizeof(int64_t));
 
   H4I::MKLShim::cAmax(ctxt, n, (const float _Complex*)x, incx, dev_results);
 
-  if (!is_result_dev_ptr) {
-      int64_t results_host_memory = 0;
-      hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  // Workaround:
+  // 1. 'return' index in case of oneMKL starts from 0 to (n-1) but others return it as 1 to n hence
+  // handling it below by incrementing it by one
+  // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
+  int64_t results_host_memory = 0;
+  hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  results_host_memory += 1;
 
-      //Fix_Me : Chance of data corruption
-      *result = (int)results_host_memory;
-
-      hip_status = hipFree(&dev_results);
+  int return_val = (int)results_host_memory;
+  if (is_result_dev_ptr) {
+    hipMemcpy(result, &return_val, sizeof(int), hipMemcpyDefault);
+  } else {
+    *result = return_val;
   }
+  hip_status = hipFree(&dev_results);
   HIPBLAS_CATCH("AMAX")
 }
 
 hipblasStatus_t hipblasIzamax(hipblasHandle_t handle, int n, const hipblasDoubleComplex* x, int incx, int* result){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // Special handling
-  if (n <= 0 || incx <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  if (x == nullptr) {
+    if (is_result_dev_ptr){
+      hipMemset(result, 0, sizeof(int));
     } else {
       *result = 0;
     }
     return HIPBLAS_STATUS_SUCCESS;
   }
-  // Warning: result is a int* where as amax takes int64_t*
-  int64_t *dev_results = (int64_t*)result;
 
-  if (!is_result_dev_ptr) {
-      hip_status = hipMalloc(&dev_results, sizeof(int64_t));
+  // error checks
+  if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
   }
+
+  int64_t *dev_results = nullptr;
+  hip_status = hipMalloc(&dev_results, sizeof(int64_t));
 
   H4I::MKLShim::zAmax(ctxt, n, (const double _Complex*)x, incx, dev_results);
 
-  if (!is_result_dev_ptr) {
-      int64_t results_host_memory = 0;
-      hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  // Workaround:
+  // 1. 'return' index in case of oneMKL starts from 0 to (n-1) but others return it as 1 to n hence
+  // handling it below by incrementing it by one
+  // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
+  int64_t results_host_memory = 0;
+  hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  results_host_memory += 1;
 
-      //Fix_Me : Chance of data corruption
-      *result = (int)results_host_memory;
-
-      hip_status = hipFree(&dev_results);
+  int return_val = (int)results_host_memory;
+  if (is_result_dev_ptr) {
+    hipMemcpy(result, &return_val, sizeof(int), hipMemcpyDefault);
+  } else {
+    *result = return_val;
   }
+  hip_status = hipFree(&dev_results);
   HIPBLAS_CATCH("AMAX")
 }
 // amax_batched
@@ -693,140 +742,184 @@ hipblasStatus_t hipblasIzamaxStridedBatched(hipblasHandle_t             handle,
 // Generic amin which can handle batched/stride/non-batched
 hipblasStatus_t hipblasIsamin(hipblasHandle_t handle, int n, const float* x, int incx, int* result){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // Special handling
-  if (n <= 0 || incx <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  if (x == nullptr) {
+    if (is_result_dev_ptr){
+      hipMemset(result, 0, sizeof(int));
     } else {
       *result = 0;
     }
     return HIPBLAS_STATUS_SUCCESS;
   }
-  // Warning: result is a int* where as amin takes int64_t*
-  int64_t *dev_results = (int64_t*)result;
 
-  if (!is_result_dev_ptr) {
-      hip_status = hipMalloc(&dev_results, sizeof(int64_t));
+  // error checks
+  if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
   }
+
+  int64_t *dev_results = nullptr;
+  hip_status = hipMalloc(&dev_results, sizeof(int64_t));
 
   H4I::MKLShim::sAmin(ctxt, n, x, incx, dev_results);
+  // Workaround:
+  // 1. 'return' index in case of oneMKL starts from 0 to (n-1) but others return it as 1 to n hence
+  // handling it below by incrementing it by one
+  // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
+  int64_t results_host_memory = 0;
+  hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  results_host_memory += 1;
 
-  if (!is_result_dev_ptr) {
-      int64_t results_host_memory = 0;
-      hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
-
-      //Fix_Me : Chance of data corruption
-      *result = (int)results_host_memory;
-
-      hip_status = hipFree(&dev_results);
+  int return_val = (int)results_host_memory;
+  if (is_result_dev_ptr) {
+    hipMemcpy(result, &return_val, sizeof(int), hipMemcpyDefault);
+  } else {
+    *result = return_val;
   }
+  hip_status = hipFree(&dev_results);
   HIPBLAS_CATCH("AMIN")
 }
 
 hipblasStatus_t hipblasIdamin(hipblasHandle_t handle, int n, const double* x, int incx, int* result){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // Special handling
-  if (n <= 0 || incx <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  if (x == nullptr) {
+    if (is_result_dev_ptr){
+      hipMemset(result, 0, sizeof(int));
     } else {
       *result = 0;
     }
-    return HIPBLAS_STATUS_SUCCESS;
+	  return HIPBLAS_STATUS_SUCCESS;
   }
-  // Warning: result is a int* where as amin takes int64_t*
-  int64_t *dev_results = (int64_t*)result;
 
-  if (!is_result_dev_ptr) {
-      hip_status = hipMalloc(&dev_results, sizeof(int64_t));
-  }
+  // error checks
+    if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0) {
+        return HIPBLAS_STATUS_INVALID_VALUE;
+    }
+
+  int64_t *dev_results = nullptr;
+  hip_status = hipMalloc(&dev_results, sizeof(int64_t));
 
   H4I::MKLShim::dAmin(ctxt, n, x, incx, dev_results);
 
-  if (!is_result_dev_ptr) {
-      int64_t results_host_memory = 0;
-      hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  // Workaround:
+  // 1. 'return' index in case of oneMKL starts from 0 to (n-1) but others return it as 1 to n hence
+  // handling it below by incrementing it by one
+  // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
+  int64_t results_host_memory = 0;
+  hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  results_host_memory += 1;
 
-      //Fix_Me : Chance of data corruption
-      *result = (int)results_host_memory;
-
-      hip_status = hipFree(&dev_results);
+  int return_val = (int)results_host_memory;
+  if (is_result_dev_ptr) {
+    hipMemcpy(result, &return_val, sizeof(int), hipMemcpyDefault);
+  } else {
+    *result = return_val;
   }
+  hip_status = hipFree(&dev_results);
   HIPBLAS_CATCH("AMIN")
 }
 
 hipblasStatus_t hipblasIcamin(hipblasHandle_t handle, int n, const hipblasComplex* x, int incx, int* result){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // Special handling
-  if (n <= 0 || incx <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  if (x == nullptr) {
+    if (is_result_dev_ptr){
+      hipMemset(result, 0, sizeof(int));
     } else {
       *result = 0;
     }
     return HIPBLAS_STATUS_SUCCESS;
   }
-  // Warning: result is a int* where as amin takes int64_t*
-  int64_t *dev_results = (int64_t*)result;
 
-  if (!is_result_dev_ptr) {
-      hip_status = hipMalloc(&dev_results, sizeof(int64_t));
+  // error checks
+  if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
   }
+
+  int64_t *dev_results = nullptr;
+  hip_status = hipMalloc(&dev_results, sizeof(int64_t));
 
   H4I::MKLShim::cAmin(ctxt, n, (const float _Complex*)x, incx, dev_results);
 
-  if (!is_result_dev_ptr) {
-      int64_t results_host_memory = 0;
-      hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  // Workaround:
+  // 1. 'return' index in case of oneMKL starts from 0 to (n-1) but others return it as 1 to n hence
+  // handling it below by incrementing it by one
+  // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
+  int64_t results_host_memory = 0;
+  hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  results_host_memory += 1;
 
-      //Fix_Me : Chance of data corruption
-      *result = (int)results_host_memory;
-
-      hip_status = hipFree(&dev_results);
+  int return_val = (int)results_host_memory;
+  if (is_result_dev_ptr) {
+    hipMemcpy(result, &return_val, sizeof(int), hipMemcpyDefault);
+  } else {
+    *result = return_val;
   }
+  hip_status = hipFree(&dev_results);
   HIPBLAS_CATCH("AMIN")
 }
 
 hipblasStatus_t hipblasIzamin(hipblasHandle_t handle, int n, const hipblasDoubleComplex* x, int incx, int* result){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // Special handling
-  if (n <= 0 || incx <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  if (x == nullptr) {
+    if (is_result_dev_ptr){
+      hipMemset(result, 0, sizeof(int));
     } else {
       *result = 0;
     }
     return HIPBLAS_STATUS_SUCCESS;
   }
-  // Warning: result is a int* where as amin takes int64_t*
-  int64_t *dev_results = (int64_t*)result;
-  if (!is_result_dev_ptr) {
-      hip_status = hipMalloc(&dev_results, sizeof(int64_t));
+
+  // error checks
+  if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
   }
+
+  int64_t *dev_results = nullptr;
+  hip_status = hipMalloc(&dev_results, sizeof(int64_t));
 
   H4I::MKLShim::zAmin(ctxt, n, (const double _Complex*)x, incx, dev_results);
 
-  if (!is_result_dev_ptr) {
-      int64_t results_host_memory = 0;
-      hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  // Workaround:
+  // 1. 'return' index in case of oneMKL starts from 0 to (n-1) but others return it as 1 to n hence
+  // handling it below by incrementing it by one
+  // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
+  int64_t results_host_memory = 0;
+  hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  results_host_memory += 1;
 
-      //Fix_Me : Chance of data corruption
-      *result = (int)results_host_memory;
-
-      hip_status = hipFree(&dev_results);
+  int return_val = (int)results_host_memory;
+  if (is_result_dev_ptr) {
+    hipMemcpy(result, &return_val, sizeof(int), hipMemcpyDefault);
+  } else {
+    *result = return_val;
   }
+  hip_status = hipFree(&dev_results);
   HIPBLAS_CATCH("AMIN")
 }
 
@@ -905,6 +998,11 @@ hipblasStatus_t hipblasIzaminStridedBatched(hipblasHandle_t             handle,
 hipblasStatus_t
   hipblasScopy(hipblasHandle_t handle, int n, const float* x, int incx, float* y, int incy){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||
+    incx <= 0 || incy <= 0 || n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::sCopy(ctxt, n, x, incx, y, incy);
   HIPBLAS_CATCH("COPY")
@@ -913,6 +1011,11 @@ hipblasStatus_t
 hipblasStatus_t
   hipblasDcopy(hipblasHandle_t handle, int n, const double* x, int incx, double* y, int incy){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||
+    incx <= 0 || incy <= 0 || n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
 	H4I::MKLShim::dCopy(ctxt, n, x, incx, y, incy);
   HIPBLAS_CATCH("COPY")
@@ -921,6 +1024,11 @@ hipblasStatus_t
 hipblasStatus_t
   hipblasCcopy(hipblasHandle_t handle, int n, const hipblasComplex* x, int incx, hipblasComplex* y, int incy){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||
+    incx <= 0 || incy <= 0 || n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::cCopy(ctxt, n, (const float _Complex*)x, incx, (float _Complex*)y, incy);
   HIPBLAS_CATCH("COPY")
@@ -929,6 +1037,11 @@ hipblasStatus_t
 hipblasStatus_t
   hipblasZcopy(hipblasHandle_t handle, int n, const hipblasDoubleComplex* x, int incx, hipblasDoubleComplex* y, int incy){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||
+    incx <= 0 || incy <= 0 || n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::zCopy(ctxt, n, (const double _Complex*)x, incx, (double _Complex*)y, incy);
   HIPBLAS_CATCH("COPY")
@@ -1037,21 +1150,20 @@ hipblasStatus_t hipblasBfdot(hipblasHandle_t handle, int n, const hipblasBfloat1
 
 hipblasStatus_t hipblasSdot(hipblasHandle_t handle, int n, const float* x, int incx, const float* y, int incy, float* result){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||result == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }    
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // special case
-  if (n <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
-    } else {
-      *result = 0;
-    }
-    return HIPBLAS_STATUS_SUCCESS;
-  }
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   float* dev_result = result;
   if (!is_result_dev_ptr) {
-      hip_status = hipMalloc(&dev_result, sizeof(float));
+    hip_status = hipMalloc(&dev_result, sizeof(float));
   }
   H4I::MKLShim::sDot(ctxt, n, x, incx, y, incy, dev_result);
 
@@ -1064,18 +1176,17 @@ hipblasStatus_t hipblasSdot(hipblasHandle_t handle, int n, const float* x, int i
 
 hipblasStatus_t hipblasDdot(hipblasHandle_t handle, int n, const double* x, int incx, const double* y, int incy, double* result){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||result == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }    
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // special case
-  if (n <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
-    } else {
-      *result = 0;
-    }
-    return HIPBLAS_STATUS_SUCCESS;
-  }
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   double* dev_result = result;
   if (!is_result_dev_ptr) {
       hip_status = hipMalloc(&dev_result, sizeof(double));
@@ -1092,18 +1203,17 @@ hipblasStatus_t hipblasDdot(hipblasHandle_t handle, int n, const double* x, int 
 hipblasStatus_t hipblasCdotc(hipblasHandle_t handle, int n, const hipblasComplex* x,
                              int incx, const hipblasComplex* y, int incy, hipblasComplex* result){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||result == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }    
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // special case
-  if (n <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
-    } else {
-      *result = 0;
-    }
-    return HIPBLAS_STATUS_SUCCESS;
-  }
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   float _Complex* dev_result = (float _Complex*)result;
   if (!is_result_dev_ptr) {
       hip_status = hipMalloc(&dev_result, sizeof(float _Complex));
@@ -1120,18 +1230,17 @@ hipblasStatus_t hipblasCdotc(hipblasHandle_t handle, int n, const hipblasComplex
 hipblasStatus_t hipblasCdotu(hipblasHandle_t handle, int n, const hipblasComplex* x,
                              int incx, const hipblasComplex* y, int incy, hipblasComplex* result){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||result == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }    
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // special case
-  if (n <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
-    } else {
-      *result = 0;
-    }
-    return HIPBLAS_STATUS_SUCCESS;
-  }
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   float _Complex* dev_result = (float _Complex*)result;
   if (!is_result_dev_ptr) {
       hip_status = hipMalloc(&dev_result, sizeof(float _Complex));
@@ -1148,18 +1257,17 @@ hipblasStatus_t hipblasCdotu(hipblasHandle_t handle, int n, const hipblasComplex
 hipblasStatus_t hipblasZdotc(hipblasHandle_t handle, int n, const hipblasDoubleComplex* x,
                              int incx, const hipblasDoubleComplex* y, int incy, hipblasDoubleComplex* result){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||result == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }    
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // special case
-  if (n <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
-    } else {
-      *result = 0;
-    }
-    return HIPBLAS_STATUS_SUCCESS;
-  }
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   double _Complex* dev_result = (double _Complex*)result;
   if (!is_result_dev_ptr) {
       hip_status = hipMalloc(&dev_result, sizeof(double _Complex));
@@ -1176,18 +1284,17 @@ hipblasStatus_t hipblasZdotc(hipblasHandle_t handle, int n, const hipblasDoubleC
 hipblasStatus_t hipblasZdotu(hipblasHandle_t handle, int n, const hipblasDoubleComplex* x,
                              int incx, const hipblasDoubleComplex* y, int incy, hipblasDoubleComplex* result){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||result == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }    
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hip_status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  // special case
-  if (n <= 0) {
-    if (is_result_dev_ptr) {
-      hip_status = hipMemset(result, 0, sizeof(result));
-    } else {
-      *result = 0;
-    }
-    return HIPBLAS_STATUS_SUCCESS;
-  }
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   double _Complex* dev_result = (double _Complex*)result;
   if (!is_result_dev_ptr) {
       hip_status = hipMalloc(&dev_result, sizeof(double _Complex));
@@ -1400,17 +1507,17 @@ hipblasStatus_t hipblasZdotuStridedBatched(hipblasHandle_t             handle,
 hipblasStatus_t
   hipblasSnrm2(hipblasHandle_t handle, int n, const float* x, int incx, float* result){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || result == nullptr ||
+      incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  if (incx <= 0 || n <= 0) {
-    if (is_result_dev_ptr) {
-      status = hipMemset(result, 0, sizeof(result));
-    } else {
-      *result = 0;
-    }
-    return HIPBLAS_STATUS_SUCCESS;
-  }
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   float* dev_result = result;
   if (!is_result_dev_ptr) {
       status = hipMalloc(&dev_result, sizeof(float));
@@ -1426,17 +1533,17 @@ hipblasStatus_t
 hipblasStatus_t
   hipblasDnrm2(hipblasHandle_t handle, int n, const double* x, int incx, double* result){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || result == nullptr ||
+      incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  if (incx <= 0 || n <= 0) {
-    if (is_result_dev_ptr) {
-      status = hipMemset(result, 0, sizeof(result));
-    } else {
-      *result = 0;
-    }
-    return HIPBLAS_STATUS_SUCCESS;
-  }
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   double* dev_result = result;
   if (!is_result_dev_ptr) {
       status = hipMalloc(&dev_result, sizeof(double));
@@ -1452,17 +1559,17 @@ hipblasStatus_t
 hipblasStatus_t
   hipblasScnrm2(hipblasHandle_t handle, int n, const hipblasComplex* x, int incx, float* result){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || result == nullptr ||
+      incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  if (incx <= 0 || n <= 0) {
-    if (is_result_dev_ptr) {
-      status = hipMemset(result, 0, sizeof(result));
-    } else {
-      *result = 0;
-    }
-    return HIPBLAS_STATUS_SUCCESS;
-  }
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   float* dev_result = result;
   if (!is_result_dev_ptr) {
       status = hipMalloc(&dev_result, sizeof(float));
@@ -1478,17 +1585,17 @@ hipblasStatus_t
 hipblasStatus_t
   hipblasDznrm2(hipblasHandle_t handle, int n, const hipblasDoubleComplex* x, int incx, double* result){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || result == nullptr ||
+      incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t status;
-  bool is_result_dev_ptr = isDevicePointer(result);
-  if (incx <= 0 || n <= 0) {
-    if (is_result_dev_ptr) {
-      status = hipMemset(result, 0, sizeof(result));
-    } else {
-      *result = 0;
-    }
-    return HIPBLAS_STATUS_SUCCESS;
-  }
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   double* dev_result = result;
   if (!is_result_dev_ptr) {
       status = hipMalloc(&dev_result, sizeof(double));
@@ -1580,20 +1687,25 @@ hipblasStatus_t hipblasDznrm2StridedBatched(hipblasHandle_t             handle,
 hipblasStatus_t hipblasSrot(hipblasHandle_t handle,int n, float* x,int incx,
                                            float* y, int incy,const float* c, const float* s){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  hipError_t hip_status;
-  bool is_c_dev_ptr = isDevicePointer(c);
-  bool is_s_dev_ptr = isDevicePointer(s);
-  float h_c, h_s;
-  if (is_c_dev_ptr) {
-      hip_status = hipMemcpy(&h_c, c, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_c = *c;
+  // error checks
+  if (handle == nullptr ) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
   }
-  if (is_s_dev_ptr) {
-      hip_status = hipMemcpy(&h_s, s, sizeof(float), hipMemcpyDefault);
+  if (x == nullptr || y == nullptr || c == nullptr || s == nullptr) {
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+  hipError_t hip_status;
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  float h_c, h_s;
+  if (is_ptr_mode_device) {
+    hip_status = hipMemcpy(&h_c, c, sizeof(float), hipMemcpyDefault);
+    hip_status = hipMemcpy(&h_s, s, sizeof(float), hipMemcpyDefault);
   } else {
-      h_s = *s;
+    h_c = *c;
+    h_s = *s;
   }
 
   H4I::MKLShim::sRot(ctxt, n, x, incx, y, incy, h_c, h_s);
@@ -1603,20 +1715,25 @@ hipblasStatus_t hipblasSrot(hipblasHandle_t handle,int n, float* x,int incx,
 hipblasStatus_t hipblasDrot(hipblasHandle_t handle,int n, double* x,int incx,
                                            double* y, int incy,const double* c, const double* s){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  hipError_t hip_status;
-  bool is_c_dev_ptr = isDevicePointer(c);
-  bool is_s_dev_ptr = isDevicePointer(s);
-  double h_c, h_s;
-  if (is_c_dev_ptr) {
-      hip_status = hipMemcpy(&h_c, c, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_c = *c;
+  // error checks
+  if (handle == nullptr ) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
   }
-  if (is_s_dev_ptr) {
-      hip_status = hipMemcpy(&h_s, s, sizeof(double), hipMemcpyDefault);
+  if (x == nullptr || y == nullptr || c == nullptr || s == nullptr) {
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+  hipError_t hip_status;
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  double h_c, h_s;
+  if (is_ptr_mode_device) {
+    hip_status = hipMemcpy(&h_c, c, sizeof(double), hipMemcpyDefault);
+    hip_status = hipMemcpy(&h_s, s, sizeof(double), hipMemcpyDefault);
   } else {
-      h_s = *s;
+    h_c = *c;
+    h_s = *s;
   }
 
   H4I::MKLShim::dRot(ctxt, n, x, incx, y, incy, h_c, h_s);
@@ -1627,21 +1744,26 @@ hipblasStatus_t hipblasCrot(hipblasHandle_t handle,int n, hipblasComplex* x,int 
                                            hipblasComplex* y, int incy,const float* c,
                                            const hipblasComplex* s){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  hipError_t hip_status;
-  bool is_c_dev_ptr = isDevicePointer(c);
-  bool is_s_dev_ptr = isDevicePointer(s);
-  float h_c;
-  if (is_c_dev_ptr) {
-      hip_status = hipMemcpy(&h_c, c, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_c = *c;
+  // error checks
+  if (handle == nullptr ) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
   }
+  if (x == nullptr || y == nullptr || c == nullptr || s == nullptr) {
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+  hipError_t hip_status;
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  float h_c;
   float _Complex h_s;
-  if (is_s_dev_ptr) {
-      hip_status = hipMemcpy(&h_s, s, sizeof(float _Complex), hipMemcpyDefault);
+  if (is_ptr_mode_device) {
+    hip_status = hipMemcpy(&h_c, c, sizeof(float), hipMemcpyDefault);
+    hip_status = hipMemcpy(&h_s, s, sizeof(float _Complex), hipMemcpyDefault);
   } else {
-      h_s = *((float _Complex*)s);
+    h_c = *c;
+    h_s = *((float _Complex*)s);
   }
 
   H4I::MKLShim::cRot(ctxt, n, (float _Complex*)x, incx, (float _Complex*)y, incy, h_c, h_s);
@@ -1652,21 +1774,27 @@ hipblasStatus_t hipblasCsrot(hipblasHandle_t handle,int n, hipblasComplex* x,int
                                            hipblasComplex* y, int incy,const float* c,
                                            const float* s){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  hipError_t hip_status;
-  bool is_c_dev_ptr = isDevicePointer(c);
-  bool is_s_dev_ptr = isDevicePointer(s);
-  float h_c, h_s;
-  if (is_c_dev_ptr) {
-      hip_status = hipMemcpy(&h_c, c, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_c = *c;
+  // error checks
+  if (handle == nullptr ) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
   }
-  if (is_s_dev_ptr) {
+  if (x == nullptr || y == nullptr || c == nullptr || s == nullptr) {
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+  hipError_t hip_status;
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  float h_c, h_s;
+  if (is_ptr_mode_device) {
+      hip_status = hipMemcpy(&h_c, c, sizeof(float), hipMemcpyDefault);
       hip_status = hipMemcpy(&h_s, s, sizeof(float), hipMemcpyDefault);
   } else {
+      h_c = *c;
       h_s = *s;
   }
+
   H4I::MKLShim::csRot(ctxt, n, (float _Complex*)x, incx, (float _Complex*)y, incy, h_c, h_s);
   HIPBLAS_CATCH("ROT")
 }
@@ -1675,22 +1803,28 @@ hipblasStatus_t hipblasZrot(hipblasHandle_t handle,int n, hipblasDoubleComplex* 
                                            hipblasDoubleComplex* y, int incy,const double* c,
                                            const hipblasDoubleComplex* s){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  hipError_t hip_status;
-  bool is_c_dev_ptr = isDevicePointer(c);
-  bool is_s_dev_ptr = isDevicePointer(s);
-  double h_c;
-  if (is_c_dev_ptr) {
-      hip_status = hipMemcpy(&h_c, c, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_c = *c;
+  // error checks
+  if (handle == nullptr ) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
   }
+  if (x == nullptr || y == nullptr || c == nullptr || s == nullptr) {
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+  hipError_t hip_status;
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  double h_c;
   double _Complex h_s;
-  if (is_s_dev_ptr) {
+  if (is_ptr_mode_device) {
+      hip_status = hipMemcpy(&h_c, c, sizeof(double), hipMemcpyDefault);
       hip_status = hipMemcpy(&h_s, s, sizeof(double _Complex), hipMemcpyDefault);
   } else {
+      h_c = *c;
       h_s = *((double _Complex*)s);
   }
+
   H4I::MKLShim::zRot(ctxt, n, (double _Complex*)x, incx, (double _Complex*)y, incy, h_c, h_s);
   HIPBLAS_CATCH("ROT")
 }
@@ -1699,21 +1833,27 @@ hipblasStatus_t hipblasZdrot(hipblasHandle_t handle,int n, hipblasDoubleComplex*
                                            hipblasDoubleComplex* y, int incy, const double* c,
                                            const double* s){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  hipError_t hip_status;
-  bool is_c_dev_ptr = isDevicePointer(c);
-  bool is_s_dev_ptr = isDevicePointer(s);
-  double h_c, h_s;
-  if (is_c_dev_ptr) {
-      hip_status = hipMemcpy(&h_c, c, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_c = *c;
+  // error checks
+  if (handle == nullptr ) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
   }
-  if (is_s_dev_ptr) {
+  if (x == nullptr || y == nullptr || c == nullptr || s == nullptr) {
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+  hipError_t hip_status;
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  double h_c, h_s;
+  if (is_ptr_mode_device) {
+      hip_status = hipMemcpy(&h_c, c, sizeof(double), hipMemcpyDefault);
       hip_status = hipMemcpy(&h_s, s, sizeof(double), hipMemcpyDefault);
   } else {
+      h_c = *c;
       h_s = *s;
   }
+
   H4I::MKLShim::zdRot(ctxt, n, (double _Complex*)x, incx, (double _Complex*)y, incy, h_c, h_s);
   HIPBLAS_CATCH("ROT")
 }
@@ -1878,14 +2018,18 @@ hipblasStatus_t hipblasZdrotStridedBatched(hipblasHandle_t       handle,
 // Generic rotg which can handle batched/stride/non-batched
 hipblasStatus_t hipblasSrotg(hipblasHandle_t handle, float* a, float* b, float* c, float* s){
   HIPBLAS_TRY
+  // error check
+  if (handle == nullptr || a == nullptr || b == nullptr || c == nullptr || s == nullptr) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_a_dev_ptr = isDevicePointer(a);
-  bool is_b_dev_ptr = isDevicePointer(b);
-  bool is_c_dev_ptr = isDevicePointer(c);
-  bool is_s_dev_ptr = isDevicePointer(s);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   // FixMe: oneAPI supports only device pointers
-  if (!is_a_dev_ptr || !is_b_dev_ptr || !is_c_dev_ptr || !is_s_dev_ptr) {
-      return HIPBLAS_STATUS_NOT_SUPPORTED;
+  if (!is_ptr_mode_device) {
+    return HIPBLAS_STATUS_NOT_SUPPORTED;
   }
   H4I::MKLShim::sRotg(ctxt, a, b, c, s);
   HIPBLAS_CATCH("ROTG")
@@ -1893,14 +2037,18 @@ hipblasStatus_t hipblasSrotg(hipblasHandle_t handle, float* a, float* b, float* 
 
 hipblasStatus_t hipblasDrotg(hipblasHandle_t handle, double* a, double* b, double* c, double* s){
   HIPBLAS_TRY
+  // error check
+  if (handle == nullptr || a == nullptr || b == nullptr || c == nullptr || s == nullptr) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_a_dev_ptr = isDevicePointer(a);
-  bool is_b_dev_ptr = isDevicePointer(b);
-  bool is_c_dev_ptr = isDevicePointer(c);
-  bool is_s_dev_ptr = isDevicePointer(s);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   // FixMe: oneAPI supports only device pointers
-  if (!is_a_dev_ptr || !is_b_dev_ptr || !is_c_dev_ptr || !is_s_dev_ptr) {
-      return HIPBLAS_STATUS_NOT_SUPPORTED;
+  if (!is_ptr_mode_device) {
+    return HIPBLAS_STATUS_NOT_SUPPORTED;
   }
   H4I::MKLShim::dRotg(ctxt, a, b, c, s);
   HIPBLAS_CATCH("ROTG")
@@ -1908,14 +2056,18 @@ hipblasStatus_t hipblasDrotg(hipblasHandle_t handle, double* a, double* b, doubl
 
 hipblasStatus_t hipblasCrotg(hipblasHandle_t handle, hipblasComplex* a, hipblasComplex* b, float* c, hipblasComplex* s){
   HIPBLAS_TRY
+  // error check
+  if (handle == nullptr || a == nullptr || b == nullptr || c == nullptr || s == nullptr) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_a_dev_ptr = isDevicePointer(a);
-  bool is_b_dev_ptr = isDevicePointer(b);
-  bool is_c_dev_ptr = isDevicePointer(c);
-  bool is_s_dev_ptr = isDevicePointer(s);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
   // FixMe: oneAPI supports only device pointers
-  if (!is_a_dev_ptr || !is_b_dev_ptr || !is_c_dev_ptr || !is_s_dev_ptr) {
-      return HIPBLAS_STATUS_NOT_SUPPORTED;
+  if (!is_ptr_mode_device) {
+    return HIPBLAS_STATUS_NOT_SUPPORTED;
   }
   H4I::MKLShim::cRotg(ctxt, (float _Complex*)a, (float _Complex*)b, c, (float _Complex*)s);
   HIPBLAS_CATCH("ROTG")
@@ -1924,16 +2076,19 @@ hipblasStatus_t hipblasCrotg(hipblasHandle_t handle, hipblasComplex* a, hipblasC
 hipblasStatus_t hipblasZrotg(hipblasHandle_t handle, hipblasDoubleComplex* a,
                              hipblasDoubleComplex* b, double* c, hipblasDoubleComplex* s){
   HIPBLAS_TRY
-  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_a_dev_ptr = isDevicePointer(a);
-  bool is_b_dev_ptr = isDevicePointer(b);
-  bool is_c_dev_ptr = isDevicePointer(c);
-  bool is_s_dev_ptr = isDevicePointer(s);
-  // FixMe: oneAPI supports only device pointers
-  if (!is_a_dev_ptr || !is_b_dev_ptr || !is_c_dev_ptr || !is_s_dev_ptr) {
-      return HIPBLAS_STATUS_NOT_SUPPORTED;
+  // error check
+  if (handle == nullptr || a == nullptr || b == nullptr || c == nullptr || s == nullptr) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
   }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
+  // FixMe: oneAPI supports only device pointers
+  if (!is_ptr_mode_device) {
+    return HIPBLAS_STATUS_NOT_SUPPORTED;
+  }
   H4I::MKLShim::zRotg(ctxt, (double _Complex*)a, (double _Complex*)b, c, (double _Complex*)s);
   HIPBLAS_CATCH("ROTG")
 }
@@ -2031,16 +2186,25 @@ hipblasStatus_t hipblasZrotgStridedBatched(hipblasHandle_t       handle,
 // Generic rotm which can handle batched/stride/non-batched
 hipblasStatus_t hipblasSrotm(hipblasHandle_t handle, int n, float* x, int incx, float* y, int incy, const float* param){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  if (n <= 0 ||x == nullptr || y == nullptr ||param == nullptr) {
+      return HIPBLAS_STATUS_SUCCESS;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hipStatus;
-  bool is_param_dev_ptr = isDevicePointer(param);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
   float* dev_param = (float*) param;
-  if (!is_param_dev_ptr) {
+  if (!is_ptr_mode_device) {
       hipStatus = hipMalloc(&dev_param, sizeof(float)*5);
       hipStatus = hipMemcpy(dev_param, param, sizeof(float)*5, hipMemcpyHostToDevice);
   }
   H4I::MKLShim::sRotm(ctxt, n, x, incx, y, incy, dev_param);
-  if (!is_param_dev_ptr) {
+  if (!is_ptr_mode_device) {
       hipStatus = hipFree(dev_param);
   }
   HIPBLAS_CATCH("ROTM")
@@ -2048,16 +2212,25 @@ hipblasStatus_t hipblasSrotm(hipblasHandle_t handle, int n, float* x, int incx, 
 
 hipblasStatus_t hipblasDrotm(hipblasHandle_t handle, int n, double* x, int incx, double* y, int incy, const double* param){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  if (n <= 0 || x == nullptr || y == nullptr ||param == nullptr) {
+      return HIPBLAS_STATUS_SUCCESS;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   hipError_t hipStatus;
-  bool is_param_dev_ptr = isDevicePointer(param);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
   double* dev_param = (double*)param;
-  if (!is_param_dev_ptr) {
+  if (!is_ptr_mode_device) {
       hipStatus = hipMalloc(&dev_param, sizeof(double)*5);
       hipStatus = hipMemcpy(dev_param, param, sizeof(double)*5, hipMemcpyHostToDevice);
   }
   H4I::MKLShim::dRotm(ctxt, n, x, incx, y, incy, dev_param);
-  if (!is_param_dev_ptr) {
+  if (!is_ptr_mode_device) {
       hipStatus = hipFree(dev_param);
   }
   HIPBLAS_CATCH("ROTM")
@@ -2118,20 +2291,22 @@ hipblasStatus_t hipblasDrotmStridedBatched(hipblasHandle_t handle,
 hipblasStatus_t hipblasSrotmg(
     hipblasHandle_t handle, float* d1, float* d2, float* x1, const float* y1, float* param) {
   HIPBLAS_TRY
+  if (handle == nullptr || d1 == nullptr || d2 == nullptr || x1 == nullptr || y1 == nullptr || param == nullptr) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_d1_dev_ptr = isDevicePointer(d1);
-  bool is_d2_dev_ptr = isDevicePointer(d2);
-  bool is_x1_dev_ptr = isDevicePointer(x1);
-  bool is_y1_dev_ptr = isDevicePointer(y1);
-  bool is_param_dev_ptr = isDevicePointer(param);
-  if (!is_d1_dev_ptr || !is_d2_dev_ptr || !is_x1_dev_ptr || !is_y1_dev_ptr || !is_param_dev_ptr) {
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  if (!is_ptr_mode_device) {
     // MKL does not support host pointers
     return HIPBLAS_STATUS_INVALID_VALUE;
   }
 
   // MKL takes y1 as scalar not a pointer hence need to have a host copy to access it incase of device pointer
   float host_y1 = 1.0;
-  if (is_y1_dev_ptr) {
+  if (is_ptr_mode_device) {
       auto hipStatus = hipMemcpy(&host_y1, y1, sizeof(float), hipMemcpyDefault);
   }
   H4I::MKLShim::sRotmg(ctxt, d1, d2, x1, host_y1, param);
@@ -2141,20 +2316,22 @@ hipblasStatus_t hipblasSrotmg(
 hipblasStatus_t hipblasDrotmg(
     hipblasHandle_t handle, double* d1, double* d2, double* x1, const double* y1, double* param) {
   HIPBLAS_TRY
+  if (handle == nullptr || d1 == nullptr || d2 == nullptr || x1 == nullptr || y1 == nullptr || param == nullptr) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_d1_dev_ptr = isDevicePointer(d1);
-  bool is_d2_dev_ptr = isDevicePointer(d2);
-  bool is_x1_dev_ptr = isDevicePointer(x1);
-  bool is_y1_dev_ptr = isDevicePointer(y1);
-  bool is_param_dev_ptr = isDevicePointer(param);
-  if (!is_d1_dev_ptr || !is_d2_dev_ptr || !is_x1_dev_ptr || !is_y1_dev_ptr || !is_param_dev_ptr) {
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_ptr_mode_device = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  if (!is_ptr_mode_device) {
     // MKL does not support host pointers
     return HIPBLAS_STATUS_INVALID_VALUE;
   }
 
   // MKL takes y1 as scalar not a pointer hence need to have a host copy to access it incase of device pointer
   double host_y1 = 1.0;
-  if (is_y1_dev_ptr) {
+  if (is_ptr_mode_device) {
       auto hipStatus = hipMemcpy(&host_y1, y1, sizeof(double), hipMemcpyDefault);
   }
   H4I::MKLShim::dRotmg(ctxt, d1, d2, x1, host_y1, param);
@@ -2218,8 +2395,15 @@ hipblasStatus_t hipblasDrotmgStridedBatched(hipblasHandle_t handle,
 hipblasStatus_t
     hipblasSscal(hipblasHandle_t handle, int n, const float *alpha, float *x, int incx){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || alpha == nullptr ||
+      incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
   float host_alpha = 1.0;
   if (is_dev_ptr) {
@@ -2235,8 +2419,15 @@ hipblasStatus_t
 hipblasStatus_t
     hipblasDscal(hipblasHandle_t handle, int n, const double *alpha, double *x, int incx){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || alpha == nullptr ||
+      incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
   double host_alpha = 1.0;
   if (is_dev_ptr) {
@@ -2252,8 +2443,15 @@ hipblasStatus_t
 hipblasStatus_t
     hipblasCscal(hipblasHandle_t handle, int n, const hipblasComplex *alpha, hipblasComplex *x, int incx){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || alpha == nullptr ||
+      incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
   float _Complex host_alpha = 1.0;
   if (is_dev_ptr) {
@@ -2269,8 +2467,15 @@ hipblasStatus_t
 hipblasStatus_t
     hipblasCsscal(hipblasHandle_t handle, int n, const float *alpha, hipblasComplex *x, int incx){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || alpha == nullptr ||
+      incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
   float host_alpha = 1.0;
   if (is_dev_ptr) {
@@ -2285,8 +2490,15 @@ hipblasStatus_t
 hipblasStatus_t
     hipblasZscal(hipblasHandle_t handle, int n, const hipblasDoubleComplex *alpha, hipblasDoubleComplex *x, int incx){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || alpha == nullptr ||
+      incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
   double _Complex host_alpha = 1.0;
   if (is_dev_ptr) {
@@ -2301,8 +2513,15 @@ hipblasStatus_t
 hipblasStatus_t
     hipblasZdscal(hipblasHandle_t handle, int n, const double *alpha, hipblasDoubleComplex *x, int incx){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || alpha == nullptr ||
+      incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  bool is_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
   double host_alpha = 1.0;
   if (is_dev_ptr) {
@@ -2425,6 +2644,11 @@ hipblasStatus_t hipblasZdscalStridedBatched(hipblasHandle_t       handle,
 // Generic swap which can handle batched/stride/non-batched
 hipblasStatus_t hipblasSswap(hipblasHandle_t handle, int n, float* x, int incx, float* y, int incy){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::sSwap(ctxt, n, x, incx, y, incy);
   HIPBLAS_CATCH("SWAP")
@@ -2432,6 +2656,11 @@ hipblasStatus_t hipblasSswap(hipblasHandle_t handle, int n, float* x, int incx, 
 
 hipblasStatus_t hipblasDswap(hipblasHandle_t handle, int n, double* x, int incx, double* y, int incy){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::dSwap(ctxt, n, x, incx, y, incy);
   HIPBLAS_CATCH("SWAP")
@@ -2440,6 +2669,11 @@ hipblasStatus_t hipblasDswap(hipblasHandle_t handle, int n, double* x, int incx,
 hipblasStatus_t hipblasCswap(hipblasHandle_t handle, int n, hipblasComplex* x, int incx,
                              hipblasComplex* y, int incy){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::cSwap(ctxt, n, (float _Complex*)x, incx, (float _Complex*)y, incy);
   HIPBLAS_CATCH("SWAP")
@@ -2448,6 +2682,11 @@ hipblasStatus_t hipblasCswap(hipblasHandle_t handle, int n, hipblasComplex* x, i
 hipblasStatus_t hipblasZswap(hipblasHandle_t handle, int n, hipblasDoubleComplex* x, int incx,
                              hipblasDoubleComplex* y, int incy){
   HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::zSwap(ctxt, n, (double _Complex*)x, incx, (double _Complex*)y, incy);
   HIPBLAS_CATCH("SWAP")
@@ -2544,22 +2783,25 @@ hipblasStatus_t hipblasSgbmv(hipblasHandle_t handle, hipblasOperation_t trans,
                               const float* AP, int lda, const float* x, int incx,
                               const float* beta, float* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   // Need to check as alpha and beta can be host/device pointer
   float h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
   } else {
+      h_alpha = *((float*)alpha);
       h_beta = *((float*)beta);
   }
+
   H4I::MKLShim::sGbmv(ctxt, convert(trans), m, n, kl, ku, h_alpha, AP, lda, x, incx, h_beta, y, incy);
   HIPBLAS_CATCH("GBMV")
 }
@@ -2569,21 +2811,24 @@ hipblasStatus_t hipblasDgbmv(hipblasHandle_t handle, hipblasOperation_t trans,
                               const double* AP, int lda, const double* x, int incx,
                               const double* beta, double* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
   } else {
+      h_alpha = *((double*)alpha);
       h_beta = *((double*)beta);
   }
+
   H4I::MKLShim::dGbmv(ctxt, convert(trans), m, n, kl, ku, h_alpha, AP, lda, x, incx, h_beta, y, incy);
   HIPBLAS_CATCH("GBMV")
 }
@@ -2593,21 +2838,24 @@ hipblasStatus_t hipblasCgbmv(hipblasHandle_t handle, hipblasOperation_t trans,
                               const hipblasComplex* AP, int lda, const hipblasComplex* x, int incx,
                               const hipblasComplex* beta, hipblasComplex* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((float _Complex*)alpha);
       h_beta = *((float _Complex*)beta);
   }
+
   H4I::MKLShim::cGbmv(ctxt, convert(trans), m, n, kl, ku, h_alpha,
               (const float _Complex *)AP, lda, (const float _Complex *)x, incx,
                 h_beta, (float _Complex *)y, incy);
@@ -2619,21 +2867,24 @@ hipblasStatus_t hipblasZgbmv(hipblasHandle_t handle, hipblasOperation_t trans,
                               const hipblasDoubleComplex* AP, int lda, const hipblasDoubleComplex* x, int incx,
                               const hipblasDoubleComplex* beta, hipblasDoubleComplex* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((double _Complex*)alpha);
       h_beta = *((double _Complex*)beta);
   }
+
   H4I::MKLShim::zGbmv(ctxt, convert(trans), m, n, kl, ku, h_alpha,
               (const double _Complex *)AP, lda, (const double _Complex *)x, incx,
                 h_beta, (double _Complex *)y, incy);
@@ -2803,21 +3054,24 @@ hipblasStatus_t hipblasSgemv(hipblasHandle_t handle, hipblasOperation_t trans, i
                              const float* alpha, const float* AP, int lda, const float* x, int incx,
                              const float* beta, float* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
   } else {
+      h_alpha = *((float*)alpha);
       h_beta = *((float*)beta);
   }
+
   H4I::MKLShim::sGemv(ctxt, convert(trans), m, n, h_alpha, AP, lda, x, incx, h_beta, y, incy);
   HIPBLAS_CATCH("GEMV")
 }
@@ -2826,21 +3080,24 @@ hipblasStatus_t hipblasDgemv(hipblasHandle_t handle, hipblasOperation_t trans, i
                              const double* alpha, const double* AP, int lda, const double* x, int incx,
                              const double* beta, double* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
   } else {
+      h_alpha = *((double*)alpha);
       h_beta = *((double*)beta);
   }
+
   H4I::MKLShim::dGemv(ctxt, convert(trans), m, n, h_alpha, AP, lda, x, incx, h_beta, y, incy);
   HIPBLAS_CATCH("GEMV")
 }
@@ -2850,21 +3107,24 @@ hipblasStatus_t hipblasCgemv(hipblasHandle_t handle, hipblasOperation_t trans,
                               const hipblasComplex* AP, int lda, const hipblasComplex* x, int incx,
                               const hipblasComplex* beta, hipblasComplex* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((float _Complex*)alpha);
       h_beta = *((float _Complex*)beta);
   }
+
   H4I::MKLShim::cGemv(ctxt, convert(trans), m, n, h_alpha,
               (const float _Complex *)AP, lda, (const float _Complex *)x, incx,
                 h_beta, (float _Complex *)y, incy);
@@ -2876,21 +3136,24 @@ hipblasStatus_t hipblasZgemv(hipblasHandle_t handle, hipblasOperation_t trans,
                               const hipblasDoubleComplex* AP, int lda, const hipblasDoubleComplex* x, int incx,
                               const hipblasDoubleComplex* beta, hipblasDoubleComplex* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((double _Complex*)alpha);
       h_beta = *((double _Complex*)beta);
   }
+
   H4I::MKLShim::zGemv(ctxt, convert(trans), m, n, h_alpha,
               (const double _Complex *)AP, lda, (const double _Complex *)x, incx,
                 h_beta, (double _Complex *)y, incy);
@@ -3044,11 +3307,17 @@ hipblasStatus_t hipblasSger(hipblasHandle_t handle, int m, int n, const float* a
                             const float* x, int incx, const float* y, int incy,
                             float* AP, int lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || x == nullptr || y == nullptr || AP == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
   } else {
       h_alpha = *((float*)alpha);
@@ -3061,11 +3330,17 @@ hipblasStatus_t hipblasDger(hipblasHandle_t handle, int m, int n, const double* 
                             const double* x, int incx, const double* y, int incy,
                             double* AP, int lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || x == nullptr || y == nullptr || AP == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
   } else {
       h_alpha = *((double*)alpha);
@@ -3078,11 +3353,17 @@ hipblasStatus_t hipblasCgerc(hipblasHandle_t handle, int m, int n, const hipblas
                             const hipblasComplex* x, int incx, const hipblasComplex* y, int incy,
                             hipblasComplex* AP, int lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || x == nullptr || y == nullptr || AP == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((float _Complex*)alpha);
@@ -3096,11 +3377,17 @@ hipblasStatus_t hipblasCgeru(hipblasHandle_t handle, int m, int n, const hipblas
                             const hipblasComplex* x, int incx, const hipblasComplex* y, int incy,
                             hipblasComplex* AP, int lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || x == nullptr || y == nullptr || AP == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((float _Complex*)alpha);
@@ -3114,11 +3401,17 @@ hipblasStatus_t hipblasZgerc(hipblasHandle_t handle, int m, int n, const hipblas
                             const hipblasDoubleComplex* x, int incx, const hipblasDoubleComplex* y, int incy,
                             hipblasDoubleComplex* AP, int lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || x == nullptr || y == nullptr || AP == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((double _Complex*)alpha);
@@ -3132,11 +3425,17 @@ hipblasStatus_t hipblasZgeru(hipblasHandle_t handle, int m, int n, const hipblas
                             const hipblasDoubleComplex* x, int incx, const hipblasDoubleComplex* y, int incy,
                             hipblasDoubleComplex* AP, int lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || x == nullptr || y == nullptr || AP == nullptr ||
+    m <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((double _Complex*)alpha);
@@ -3340,21 +3639,24 @@ hipblasStatus_t hipblasChbmv(hipblasHandle_t handle, hipblasFillMode_t uplo,
                             const hipblasComplex* x, int incx,
                              const hipblasComplex* beta, hipblasComplex* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    k <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((float _Complex*)alpha);
       h_beta = *((float _Complex*)beta);
   }
+
   H4I::MKLShim::cHbmv(ctxt, convert(uplo), n,k, h_alpha, (const float _Complex*)AP, lda, (const float _Complex*)x, incx, 
               h_beta, (float _Complex*)y, incy);
   HIPBLAS_CATCH("HBMV")
@@ -3366,21 +3668,24 @@ hipblasStatus_t hipblasZhbmv(hipblasHandle_t handle, hipblasFillMode_t uplo,
                             const hipblasDoubleComplex* x, int incx,
                              const hipblasDoubleComplex* beta, hipblasDoubleComplex* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    k <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((double _Complex*)alpha);
       h_beta = *((double _Complex*)beta);
   }
+
   H4I::MKLShim::zHbmv(ctxt, convert(uplo), n,k, h_alpha, (const double _Complex*)AP, lda, (const double _Complex*)x, incx, 
               h_beta, (double _Complex*)y, incy);
   HIPBLAS_CATCH("HBMV")
@@ -3392,21 +3697,24 @@ hipblasStatus_t hipblasChemv(hipblasHandle_t handle, hipblasFillMode_t uplo, int
                             int lda, const hipblasComplex* x, int incx,
                             const hipblasComplex* beta, hipblasComplex* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((float _Complex*)alpha);
       h_beta = *((float _Complex*)beta);
   }
+
   H4I::MKLShim::cHemv(ctxt, convert(uplo), n, h_alpha, (const float _Complex*)AP, lda,
               (const float _Complex*)x, incx, h_beta, (float _Complex*)y, incy);
   HIPBLAS_CATCH("HEMV")
@@ -3417,21 +3725,24 @@ hipblasStatus_t hipblasZhemv(hipblasHandle_t handle, hipblasFillMode_t uplo, int
                             int lda, const hipblasDoubleComplex* x, int incx,
                             const hipblasDoubleComplex* beta, hipblasDoubleComplex* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+    n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((double _Complex*)alpha);
       h_beta = *((double _Complex*)beta);
   }
+
   H4I::MKLShim::zHemv(ctxt, convert(uplo), n, h_alpha, (const double _Complex*)AP, lda,
               (const double _Complex*)x, incx, h_beta, (double _Complex*)y, incy); 
   HIPBLAS_CATCH("HEMV")
@@ -3582,11 +3893,17 @@ hipblasStatus_t hipblasCher(hipblasHandle_t handle, hipblasFillMode_t uplo, int 
                             const float* alpha, const hipblasComplex* x, int incx,
                             hipblasComplex* AP, int lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr ||
+      n <= 0 || lda <= 0 ) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
   } else {
       h_alpha = *((float*)alpha);
@@ -3599,11 +3916,17 @@ hipblasStatus_t hipblasZher(hipblasHandle_t handle, hipblasFillMode_t uplo, int 
                             const double* alpha, const hipblasDoubleComplex* x, int incx,
                             hipblasDoubleComplex* AP, int lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr ||
+      n <= 0 || lda <= 0 ) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
   } else {
       h_alpha = *((double*)alpha);
@@ -3671,11 +3994,17 @@ hipblasStatus_t hipblasCher2(hipblasHandle_t handle, hipblasFillMode_t uplo, int
                             const hipblasComplex* alpha, const hipblasComplex* x, int incx,
                             const hipblasComplex* y, int incy, hipblasComplex* AP, int lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || y == nullptr ||
+      n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((float _Complex*)alpha);
@@ -3689,11 +4018,17 @@ hipblasStatus_t hipblasZher2(hipblasHandle_t handle, hipblasFillMode_t uplo, int
                             const hipblasDoubleComplex* alpha, const hipblasDoubleComplex* x, int incx,
                             const hipblasDoubleComplex* y, int incy, hipblasDoubleComplex* AP, int lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || y == nullptr ||
+      n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((double _Complex*)alpha);
@@ -3772,21 +4107,24 @@ hipblasStatus_t hipblasChpmv(hipblasHandle_t handle, hipblasFillMode_t uplo, int
                             const hipblasComplex* x, int incx, const hipblasComplex* beta,
                             hipblasComplex* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+      n <= 0 ) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((float _Complex*)alpha);
       h_beta = *((float _Complex*)beta);
   }
+
   H4I::MKLShim::cHpmv(ctxt, convert(uplo), n, h_alpha, (const float _Complex*)AP, (const float _Complex*)x, incx,
               h_beta, (float _Complex*)y, incy);
   HIPBLAS_CATCH("HPMV")
@@ -3797,21 +4135,24 @@ hipblasStatus_t hipblasZhpmv(hipblasHandle_t handle, hipblasFillMode_t uplo, int
                             const hipblasDoubleComplex* x, int incx, const hipblasDoubleComplex* beta,
                             hipblasDoubleComplex* y, int incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+      n <= 0 ) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((double _Complex*)alpha);
       h_beta = *((double _Complex*)beta);
   }
+
   H4I::MKLShim::zHpmv(ctxt, convert(uplo), n, h_alpha, (const double _Complex*)AP, (const double _Complex*)x, incx,
               h_beta, (double _Complex*)y, incy);
   HIPBLAS_CATCH("HPMV")
@@ -3890,12 +4231,18 @@ hipblasStatus_t hipblasChpr(hipblasHandle_t       handle,
                             int                   incx,
                             hipblasComplex*       AP){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr ||
+      n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
   } else {
       h_alpha = *((float*)alpha);
@@ -3912,12 +4259,18 @@ hipblasStatus_t hipblasZhpr(hipblasHandle_t             handle,
                             int                         incx,
                             hipblasDoubleComplex*       AP){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr ||
+      n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
   } else {
       h_alpha = *((double*)alpha);
@@ -3987,12 +4340,18 @@ hipblasStatus_t hipblasChpr2(hipblasHandle_t       handle,
                              int                   incy,
                              hipblasComplex*       AP){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || y == nullptr ||
+      n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((float _Complex*)alpha);
@@ -4012,12 +4371,18 @@ hipblasStatus_t hipblasZhpr2(hipblasHandle_t             handle,
                              int                         incy,
                              hipblasDoubleComplex*       AP){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || y == nullptr ||
+      n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((double _Complex*)alpha);
@@ -4101,22 +4466,25 @@ hipblasStatus_t hipblasSsbmv(hipblasHandle_t   handle,
                              float*            y,
                              int               incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
   } else {
+      h_alpha = *((float*)alpha);
       h_beta = *((float*)beta);
   }
+
   H4I::MKLShim::sSbmv(ctxt, convert(uplo), n, k, h_alpha, A, lda, x, incx, h_beta, y, incy);
   HIPBLAS_CATCH("SBMV")
 }
@@ -4134,22 +4502,25 @@ hipblasStatus_t hipblasDsbmv(hipblasHandle_t   handle,
                              double*           y,
                              int               incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
   } else {
+      h_alpha = *((double*)alpha);
       h_beta = *((double*)beta);
   }
+
   H4I::MKLShim::dSbmv(ctxt, convert(uplo), n, k, h_alpha, A, lda, x, incx, h_beta, y, incy);
   HIPBLAS_CATCH("SBMV")
 }
@@ -4238,22 +4609,25 @@ hipblasStatus_t hipblasSspmv(hipblasHandle_t   handle,
                              float*            y,
                              int               incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+      n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
   } else {
+      h_alpha = *((float*)alpha);
       h_beta = *((float*)beta);
   }
+
   H4I::MKLShim::sSpmv(ctxt, convert(uplo), n, h_alpha, AP, x, incx, h_beta, y, incy);
   HIPBLAS_CATCH("SBMV")
 }
@@ -4269,22 +4643,25 @@ hipblasStatus_t hipblasDspmv(hipblasHandle_t   handle,
                              double*           y,
                              int               incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || beta == nullptr || y == nullptr ||
+      n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
   } else {
+      h_alpha = *((double*)alpha);
       h_beta = *((double*)beta);
   }
+
   H4I::MKLShim::dSpmv(ctxt, convert(uplo), n, h_alpha, AP, x, incx, h_beta, y, incy);
   HIPBLAS_CATCH("SBMV")
 }
@@ -4362,12 +4739,18 @@ hipblasStatus_t hipblasSspr(hipblasHandle_t   handle,
                             int               incx,
                             float*            AP){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr ||
+      n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
   } else {
       h_alpha = *((float*)alpha);
@@ -4384,12 +4767,18 @@ hipblasStatus_t hipblasDspr(hipblasHandle_t   handle,
                             int               incx,
                             double*           AP){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr ||
+      n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
   } else {
       h_alpha = *((double*)alpha);
@@ -4527,12 +4916,18 @@ hipblasStatus_t hipblasSspr2(hipblasHandle_t   handle,
                              int               incy,
                              float*            AP){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || y == nullptr ||
+      n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
   } else {
       h_alpha = *((float*)alpha);
@@ -4551,12 +4946,18 @@ hipblasStatus_t hipblasDspr2(hipblasHandle_t   handle,
                              int               incy,
                              double*           AP){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || AP == nullptr || x == nullptr || y == nullptr ||
+      n <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
   } else {
       h_alpha = *((double*)alpha);
@@ -4638,22 +5039,25 @@ hipblasStatus_t hipblasSsymv(hipblasHandle_t   handle,
                              float*            y,
                              int               incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || x == nullptr || y == nullptr || beta == nullptr ||
+      n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
   } else {
+      h_alpha = *((float*)alpha);
       h_beta = *((float*)beta);
   }
+
   H4I::MKLShim::sSymv(ctxt, convert(uplo), n, h_alpha, A, lda, x, incx, h_beta, y, incy);
   HIPBLAS_CATCH("SYMV")
 }
@@ -4670,22 +5074,25 @@ hipblasStatus_t hipblasDsymv(hipblasHandle_t   handle,
                              double*           y,
                              int               incy){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || x == nullptr || y == nullptr || beta == nullptr ||
+      n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
   } else {
+      h_alpha = *((double*)alpha);
       h_beta = *((double*)beta);
   }
+
   H4I::MKLShim::dSymv(ctxt, convert(uplo), n, h_alpha, A, lda, x, incx, h_beta, y, incy);
   HIPBLAS_CATCH("SYMV")
 }
@@ -4861,12 +5268,18 @@ hipblasStatus_t hipblasSsyr(hipblasHandle_t   handle,
                             float*            A,
                             int               lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || x == nullptr ||
+      n <= 0 || incx <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
   } else {
       h_alpha = *((float*)alpha);
@@ -4884,12 +5297,18 @@ hipblasStatus_t hipblasDsyr(hipblasHandle_t   handle,
                             double*           A,
                             int               lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || x == nullptr ||
+      n <= 0 || incx <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
   } else {
       h_alpha = *((double*)alpha);
@@ -5037,12 +5456,18 @@ hipblasStatus_t hipblasSsyr2(hipblasHandle_t   handle,
                              float*            A,
                              int               lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || x == nullptr || y == nullptr ||
+      n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
   } else {
       h_alpha = *((float*)alpha);
@@ -5062,12 +5487,18 @@ hipblasStatus_t hipblasDsyr2(hipblasHandle_t   handle,
                              double*           A,
                              int               lda){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || x == nullptr || y == nullptr ||
+      n <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
   } else {
       h_alpha = *((double*)alpha);
@@ -5239,6 +5670,10 @@ hipblasStatus_t hipblasStbmv(hipblasHandle_t    handle,
                              float*             x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 || k <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::sTbmv(ctxt, convert(uplo), convert(transA), convert(diag), m, k, A, lda, x, incx);
   HIPBLAS_CATCH("TBMV")
@@ -5255,6 +5690,10 @@ hipblasStatus_t hipblasDtbmv(hipblasHandle_t    handle,
                              double*            x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 || k <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::dTbmv(ctxt, convert(uplo), convert(transA), convert(diag), m, k, A, lda, x, incx);
   HIPBLAS_CATCH("TBMV")
@@ -5271,6 +5710,10 @@ hipblasStatus_t hipblasCtbmv(hipblasHandle_t       handle,
                              hipblasComplex*       x,
                              int                   incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 || k <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::cTbmv(ctxt, convert(uplo), convert(transA), convert(diag), m, k, 
                           (const float _Complex*)A, lda, (float _Complex*)x, incx);
@@ -5288,6 +5731,10 @@ hipblasStatus_t hipblasZtbmv(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       x,
                              int                         incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 || k <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::zTbmv(ctxt, convert(uplo), convert(transA), convert(diag), m, k, 
                           (const double _Complex*)A, lda, (double _Complex*)x, incx);
@@ -5428,6 +5875,10 @@ hipblasStatus_t hipblasStbsv(hipblasHandle_t    handle,
                              float*             x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      n <= 0 || k <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::sTbsv(ctxt, convert(uplo), convert(transA), convert(diag), n, k, A, lda, x, incx);
   HIPBLAS_CATCH("TBSV")
@@ -5444,6 +5895,10 @@ hipblasStatus_t hipblasDtbsv(hipblasHandle_t    handle,
                              double*            x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      n <= 0 || k <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::dTbsv(ctxt, convert(uplo), convert(transA), convert(diag), n, k, A, lda, x, incx);
   HIPBLAS_CATCH("TBSV")
@@ -5461,6 +5916,10 @@ hipblasStatus_t hipblasCtbsv(hipblasHandle_t       handle,
                              hipblasComplex*       x,
                              int                   incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      n <= 0 || k <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::cTbsv(ctxt, convert(uplo), convert(transA), convert(diag), n, k, (const float _Complex*)A, lda, (float _Complex*)x, incx);
   HIPBLAS_CATCH("TBSV")
@@ -5478,6 +5937,10 @@ hipblasStatus_t hipblasZtbsv(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       x,
                              int                         incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      n <= 0 || k <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::zTbsv(ctxt, convert(uplo), convert(transA), convert(diag), n, k, (const double _Complex*)A, lda, (double _Complex*)x, incx);
   HIPBLAS_CATCH("TBSV")
@@ -5616,6 +6079,10 @@ hipblasStatus_t hipblasStpmv(hipblasHandle_t    handle,
                              float*             x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || AP == nullptr || x == nullptr ||
+      m <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::sTpmv(ctxt, convert(uplo), convert(transA), convert(diag), m, AP, x, incx);
   HIPBLAS_CATCH("TPMV")
@@ -5630,6 +6097,10 @@ hipblasStatus_t hipblasDtpmv(hipblasHandle_t    handle,
                              double*            x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || AP == nullptr || x == nullptr ||
+      m <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::dTpmv(ctxt, convert(uplo), convert(transA), convert(diag), m, AP, x, incx);
   HIPBLAS_CATCH("TPMV")
@@ -5644,6 +6115,10 @@ hipblasStatus_t hipblasCtpmv(hipblasHandle_t       handle,
                              hipblasComplex*       x,
                              int                   incx){
   HIPBLAS_TRY
+  if (handle == nullptr || AP == nullptr || x == nullptr ||
+      m <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::cTpmv(ctxt, convert(uplo), convert(transA), convert(diag), m, 
               (const float _Complex*)AP, (float _Complex*)x, incx);
@@ -5659,6 +6134,10 @@ hipblasStatus_t hipblasZtpmv(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       x,
                              int                         incx){
   HIPBLAS_TRY
+  if (handle == nullptr || AP == nullptr || x == nullptr ||
+      m <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::zTpmv(ctxt, convert(uplo), convert(transA), convert(diag), m, 
               (const double _Complex*)AP, (double _Complex*)x, incx);
@@ -5781,6 +6260,10 @@ hipblasStatus_t hipblasStpsv(hipblasHandle_t    handle,
                              float*             x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || AP == nullptr || x == nullptr ||
+      m <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::sTpsv(ctxt, convert(uplo), convert(transA), convert(diag), m, AP, x, incx);
   HIPBLAS_CATCH("TPSV")
@@ -5795,6 +6278,10 @@ hipblasStatus_t hipblasDtpsv(hipblasHandle_t    handle,
                              double*            x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || AP == nullptr || x == nullptr ||
+      m <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::dTpsv(ctxt, convert(uplo), convert(transA), convert(diag), m, AP, x, incx);
   HIPBLAS_CATCH("TPSV")
@@ -5809,6 +6296,10 @@ hipblasStatus_t hipblasCtpsv(hipblasHandle_t       handle,
                              hipblasComplex*       x,
                              int                   incx){
   HIPBLAS_TRY
+  if (handle == nullptr || AP == nullptr || x == nullptr ||
+      m <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::cTpsv(ctxt, convert(uplo), convert(transA), convert(diag), m,
               (const float _Complex*) AP, (float _Complex*)x, incx);
@@ -5823,6 +6314,10 @@ hipblasStatus_t hipblasZtpsv(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       x,
                              int                         incx){
   HIPBLAS_TRY
+  if (handle == nullptr || AP == nullptr || x == nullptr ||
+      m <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::zTpsv(ctxt, convert(uplo), convert(transA), convert(diag), m,
               (const double _Complex*) AP, (double _Complex*)x, incx);
@@ -5946,6 +6441,10 @@ hipblasStatus_t hipblasStrmv(hipblasHandle_t    handle,
                              float*             x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::sTrmv(ctxt, convert(uplo), convert(transA), convert(diag), m, A, lda, x, incx);
   HIPBLAS_CATCH("TRMV")
@@ -5961,6 +6460,10 @@ hipblasStatus_t hipblasDtrmv(hipblasHandle_t    handle,
                              double*            x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::dTrmv(ctxt, convert(uplo), convert(transA), convert(diag), m, A, lda, x, incx);
   HIPBLAS_CATCH("TRMV")
@@ -5976,6 +6479,10 @@ hipblasStatus_t hipblasCtrmv(hipblasHandle_t       handle,
                              hipblasComplex*       x,
                              int                   incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::cTrmv(ctxt, convert(uplo), convert(transA), convert(diag), m,
               (const float _Complex*)A, lda, (float _Complex*)x, incx);
@@ -5992,6 +6499,10 @@ hipblasStatus_t hipblasZtrmv(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       x,
                              int                         incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 || lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::zTrmv(ctxt, convert(uplo), convert(transA), convert(diag), m,
               (const double _Complex*)A, lda, (double _Complex*)x, incx);
@@ -6122,6 +6633,10 @@ hipblasStatus_t hipblasStrsv(hipblasHandle_t    handle,
                              float*             x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 ||lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::sTrsv(ctxt, convert(uplo), convert(transA), convert(diag), m, A, lda, x, incx);
   HIPBLAS_CATCH("TRSV")
@@ -6137,6 +6652,10 @@ hipblasStatus_t hipblasDtrsv(hipblasHandle_t    handle,
                              double*            x,
                              int                incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 ||lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::dTrsv(ctxt, convert(uplo), convert(transA), convert(diag), m, A, lda, x, incx);
   HIPBLAS_CATCH("TRSV")
@@ -6152,6 +6671,10 @@ hipblasStatus_t hipblasCtrsv(hipblasHandle_t       handle,
                              hipblasComplex*       x,
                              int                   incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 ||lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::cTrsv(ctxt, convert(uplo), convert(transA), convert(diag), m,
               (const float _Complex*)A, lda, (float _Complex*)x, incx);
@@ -6168,6 +6691,10 @@ hipblasStatus_t hipblasZtrsv(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       x,
                              int                         incx){
   HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || x == nullptr ||
+      m <= 0 ||lda <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   H4I::MKLShim::zTrsv(ctxt, convert(uplo), convert(transA), convert(diag), m,
               (const double _Complex*)A, lda, (double _Complex*)x, incx);
@@ -6307,22 +6834,25 @@ hipblasStatus_t hipblasCherk(hipblasHandle_t       handle,
                              hipblasComplex*       C,
                              int                   ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
   } else {
+      h_alpha = *((float*)alpha);
       h_beta = *((float*)beta);
   }
+
   H4I::MKLShim::cHerk(ctxt, convert(uplo), convert(transA), n, k,
               h_alpha, (const float _Complex*)A, lda, h_beta, (float _Complex*)C, ldc);
   HIPBLAS_CATCH("HERK")
@@ -6340,22 +6870,25 @@ hipblasStatus_t hipblasZherk(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       C,
                              int                         ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
   } else {
+      h_alpha = *((double*)alpha);
       h_beta = *((double*)beta);
   }
+
   H4I::MKLShim::zHerk(ctxt, convert(uplo), convert(transA), n, k,
               h_alpha, (const double _Complex*)A, lda, h_beta, (double _Complex*)C, ldc);
   HIPBLAS_CATCH("HERK")
@@ -6551,23 +7084,26 @@ hipblasStatus_t hipblasCher2k(hipblasHandle_t       handle,
                               hipblasComplex*       C,
                               int                   ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha;
   float h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
   } else {
+      h_alpha = *((float _Complex*)alpha);
       h_beta = *((float*)beta);
   }
+
   H4I::MKLShim::cHer2k(ctxt, convert(uplo), convert(transA), n, k, h_alpha,
               (const float _Complex*)A, lda, (const float _Complex*)B, ldb, h_beta,
               (float _Complex*)C, ldc);
@@ -6588,23 +7124,26 @@ hipblasStatus_t hipblasZher2k(hipblasHandle_t             handle,
                               hipblasDoubleComplex*       C,
                               int                         ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha;
   double h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
   } else {
+      h_alpha = *((double _Complex*)alpha);
       h_beta = *((double*)beta);
   }
+
   H4I::MKLShim::zHer2k(ctxt, convert(uplo), convert(transA), n, k, h_alpha,
               (const double _Complex*)A, lda, (const double _Complex*)B, ldb, h_beta,
               (double _Complex*)C, ldc);
@@ -6702,22 +7241,25 @@ hipblasStatus_t hipblasSsymm(hipblasHandle_t   handle,
                              float*            C,
                              int               ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      m <= 0 || n <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
   } else {
+      h_alpha = *((float*)alpha);
       h_beta = *((float*)beta);
   }
+
   H4I::MKLShim::sSymm(ctxt, convert(side), convert(uplo), m, n, h_alpha, A, lda, B, ldb, h_beta, C, ldc);
   HIPBLAS_CATCH("SYMM")
 }
@@ -6736,22 +7278,25 @@ hipblasStatus_t hipblasDsymm(hipblasHandle_t   handle,
                              double*           C,
                              int               ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      m <= 0 || n <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
   } else {
+      h_alpha = *((double*)alpha);
       h_beta = *((double*)beta);
   }
+
   H4I::MKLShim::dSymm(ctxt, convert(side), convert(uplo), m, n, h_alpha, A, lda, B, ldb, h_beta, C, ldc);
   HIPBLAS_CATCH("SYMM")
 }
@@ -6951,22 +7496,25 @@ hipblasStatus_t hipblasSsyrk(hipblasHandle_t    handle,
                              float*             C,
                              int                ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
   } else {
+      h_alpha = *((float*)alpha);
       h_beta = *((float*)beta);
   }
+
   H4I::MKLShim::sSyrk(ctxt, convert(uplo), convert(transA), n, k, h_alpha, A, lda, h_beta, C, ldc);
   HIPBLAS_CATCH("SYRK")
 }
@@ -6983,22 +7531,25 @@ hipblasStatus_t hipblasDsyrk(hipblasHandle_t    handle,
                              double*            C,
                              int                ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
   } else {
+      h_alpha = *((double*)alpha);
       h_beta = *((double*)beta);
   }
+
   H4I::MKLShim::dSyrk(ctxt, convert(uplo), convert(transA), n, k, h_alpha, A, lda, h_beta, C, ldc);
   HIPBLAS_CATCH("SYRK")
 }
@@ -7015,22 +7566,25 @@ hipblasStatus_t hipblasCsyrk(hipblasHandle_t       handle,
                              hipblasComplex*       C,
                              int                   ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((float _Complex*)alpha);
       h_beta = *((float _Complex*)beta);
   }
+
   H4I::MKLShim::cSyrk(ctxt, convert(uplo), convert(transA), n, k, h_alpha, (const float _Complex*)A, lda,
               h_beta, (float _Complex*)C, ldc);
   HIPBLAS_CATCH("SYRK")
@@ -7047,22 +7601,25 @@ hipblasStatus_t hipblasZsyrk(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       C,
                              int                         ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((double _Complex*)alpha);
       h_beta = *((double _Complex*)beta);
   }
+
   H4I::MKLShim::zSyrk(ctxt, convert(uplo), convert(transA), n, k, h_alpha, (const double _Complex*)A, lda,
               h_beta, (double _Complex*)C, ldc);
   HIPBLAS_CATCH("SYRK")
@@ -7213,22 +7770,25 @@ hipblasStatus_t hipblasSsyr2k(hipblasHandle_t    handle,
                               float*             C,
                               int                ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
   } else {
+      h_alpha = *((float*)alpha);
       h_beta = *((float*)beta);
   }
+
   H4I::MKLShim::sSyr2k(ctxt, convert(uplo), convert(transA), n, k, h_alpha, A, lda, B, ldb, h_beta, C, ldc);
   HIPBLAS_CATCH("SYR2K")
 }
@@ -7247,22 +7807,25 @@ hipblasStatus_t hipblasDsyr2k(hipblasHandle_t    handle,
                               double*            C,
                               int                ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
   } else {
+      h_alpha = *((double*)alpha);
       h_beta = *((double*)beta);
   }
+
   H4I::MKLShim::dSyr2k(ctxt, convert(uplo), convert(transA), n, k, h_alpha, A, lda, B, ldb, h_beta, C, ldc);
   HIPBLAS_CATCH("SYR2K")
 }
@@ -7281,22 +7844,25 @@ hipblasStatus_t hipblasCsyr2k(hipblasHandle_t       handle,
                               hipblasComplex*       C,
                               int                   ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((float _Complex*)alpha);
       h_beta = *((float _Complex*)beta);
   }
+
   H4I::MKLShim::cSyr2k(ctxt, convert(uplo), convert(transA), n, k, h_alpha,
                 (const float _Complex*)A, lda, (const float _Complex*)B, ldb, h_beta, (float _Complex*)C, ldc);
   HIPBLAS_CATCH("SYR2K")
@@ -7316,22 +7882,25 @@ hipblasStatus_t hipblasZsyr2k(hipblasHandle_t             handle,
                               hipblasDoubleComplex*       C,
                               int                         ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((double _Complex*)alpha);
       h_beta = *((double _Complex*)beta);
   }
+
   H4I::MKLShim::zSyr2k(ctxt, convert(uplo), convert(transA), n, k, h_alpha,
                 (const double _Complex*)A, lda, (const double _Complex*)B, ldb, h_beta, (double _Complex*)C, ldc);
   HIPBLAS_CATCH("SYR2K")
@@ -7502,22 +8071,25 @@ hipblasStatus_t hipblasChemm(hipblasHandle_t       handle,
                              hipblasComplex*       C,
                              int                   ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((float _Complex*)alpha);
       h_beta = *((float _Complex*)beta);
   }
+
   H4I::MKLShim::cHemm(ctxt, convert(side), convert(uplo), n, k, h_alpha, (const float _Complex*)A, lda, 
               (const float _Complex*)B, ldb, h_beta, (float _Complex*)C, ldc);
   HIPBLAS_CATCH("HEMM")
@@ -7537,22 +8109,25 @@ hipblasStatus_t hipblasZhemm(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       C,
                              int                         ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      k <= 0 || n <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((double _Complex*)alpha);
       h_beta = *((double _Complex*)beta);
   }
+
   H4I::MKLShim::zHemm(ctxt, convert(side), convert(uplo), n, k, h_alpha, (const double _Complex*)A, lda, 
               (const double _Complex*)B, ldb, h_beta, (double _Complex*)C, ldc);
   HIPBLAS_CATCH("HEMM")
@@ -7648,12 +8223,18 @@ hipblasStatus_t hipblasStrmm(hipblasHandle_t    handle,
                              float*             B,
                              int                ldb){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr ||
+      m <= 0 || n <= 0 || lda <= 0 || ldb <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
   } else {
       h_alpha = *((float*)alpha);
@@ -7675,12 +8256,18 @@ hipblasStatus_t hipblasDtrmm(hipblasHandle_t    handle,
                              double*            B,
                              int                ldb){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr ||
+      m <= 0 || n <= 0 || lda <= 0 || ldb <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
   } else {
       h_alpha = *((double*)alpha);
@@ -7702,12 +8289,18 @@ hipblasStatus_t hipblasCtrmm(hipblasHandle_t       handle,
                              hipblasComplex*       B,
                              int                   ldb){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr ||
+      m <= 0 || n <= 0 || lda <= 0 || ldb <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((float _Complex*)alpha);
@@ -7730,12 +8323,18 @@ hipblasStatus_t hipblasZtrmm(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       B,
                              int                         ldb){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr ||
+      m <= 0 || n <= 0 || lda <= 0 || ldb <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((double _Complex*)alpha);
@@ -7897,12 +8496,18 @@ hipblasStatus_t hipblasStrsm(hipblasHandle_t    handle,
                              float*             B,
                              int                ldb){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr ||
+      m <= 0 || n <= 0 || lda <= 0 || ldb <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
   } else {
       h_alpha = *((float*)alpha);
@@ -7924,12 +8529,18 @@ hipblasStatus_t hipblasDtrsm(hipblasHandle_t    handle,
                              double*            B,
                              int                ldb){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr ||
+      m <= 0 || n <= 0 || lda <= 0 || ldb <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
   } else {
       h_alpha = *((double*)alpha);
@@ -7951,12 +8562,18 @@ hipblasStatus_t hipblasCtrsm(hipblasHandle_t       handle,
                              hipblasComplex*       B,
                              int                   ldb){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr ||
+      m <= 0 || n <= 0 || lda <= 0 || ldb <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((float _Complex*)alpha);
@@ -7979,12 +8596,18 @@ hipblasStatus_t hipblasZtrsm(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       B,
                              int                         ldb){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr ||
+      m <= 0 || n <= 0 || lda <= 0 || ldb <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
   } else {
       h_alpha = *((double _Complex*)alpha);
@@ -8165,22 +8788,25 @@ hipblasStatus_t hipblasSgemm(hipblasHandle_t    handle,
                              float*             C,
                              int                ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      m <= 0 || n <= 0 || k <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
   } else {
+      h_alpha = *((float*)alpha);
       h_beta = *((float*)beta);
   }
+
   H4I::MKLShim::sGemm(ctxt, convert(transa), convert(transb), m, n, k,
               h_alpha, A, lda, B, ldb, h_beta, C, ldc);
   HIPBLAS_CATCH("GEMM")
@@ -8201,22 +8827,25 @@ hipblasStatus_t hipblasDgemm(hipblasHandle_t    handle,
                              double*            C,
                              int                ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      m <= 0 || n <= 0 || k <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
   } else {
+      h_alpha = *((double*)alpha);
       h_beta = *((double*)beta);
   }
+
   H4I::MKLShim::dGemm(ctxt, convert(transa), convert(transb), m, n, k,
               h_alpha, A, lda, B, ldb, h_beta, C, ldc);
   HIPBLAS_CATCH("GEMM")
@@ -8237,22 +8866,25 @@ hipblasStatus_t hipblasCgemm(hipblasHandle_t       handle,
                              hipblasComplex*       C,
                              int                   ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      m <= 0 || n <= 0 || k <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   float _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((float _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(float _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((float _Complex*)alpha);
       h_beta = *((float _Complex*)beta);
   }
+
   H4I::MKLShim::cGemm(ctxt, convert(transa), convert(transb), m, n, k,
               h_alpha, (const float _Complex*)A, lda, (const float _Complex*)B, ldb,
               h_beta, (float _Complex*)C, ldc);
@@ -8274,22 +8906,25 @@ hipblasStatus_t hipblasZgemm(hipblasHandle_t             handle,
                              hipblasDoubleComplex*       C,
                              int                         ldc){
   HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || C == nullptr || beta == nullptr ||
+      m <= 0 || n <= 0 || k <= 0 || lda <= 0 || ldb <= 0 || ldc <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
   auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
   // As per spec alpha can be device/host memory. In case of device memory *alpha will crash
-  auto is_alpha_dev_ptr = isDevicePointer(alpha);
-  auto is_beta_dev_ptr = isDevicePointer(beta);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
   double _Complex h_alpha, h_beta;
-  if (is_alpha_dev_ptr) {
+  if (is_dev_ptr) {
       hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
-  } else {
-      h_alpha = *((double _Complex*)alpha);
-  }
-  if (is_beta_dev_ptr) {
       hipMemcpy(&h_beta, beta, sizeof(double _Complex), hipMemcpyDefault);
   } else {
+      h_alpha = *((double _Complex*)alpha);
       h_beta = *((double _Complex*)beta);
   }
+
   H4I::MKLShim::zGemm(ctxt, convert(transa), convert(transb), m, n, k,
               h_alpha, (const double _Complex*)A, lda, (const double _Complex*)B, ldb,
               h_beta, (double _Complex*)C, ldc);
