@@ -35,6 +35,10 @@ target_include_directories(HipBLAS
 	PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include;${CMAKE_BINARY_DIR}/include>"
 		$<INSTALL_INTERFACE:include>)
+# We need to be sure the ROCm HipBLAS library is downloaded and "installed"
+# (i.e., the hipblas.h header has been copied to the location we want) before
+# we build this library.
+add_dependencies(HipBLAS ROCmHipblas)
 
 target_link_libraries(HipBLAS
 	PRIVATE
