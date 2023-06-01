@@ -9,11 +9,14 @@ project(HipBLAS
 
 # We will use HIP in some fashion, no matter which platform
 # we're targeting or what parts of the software we're building.
-find_package(HIP REQUIRED)
-# When using CHIP-SPV, CMake's method for finding a HIP compiler
-# seems to want to find ROCm.  Since ROCm isn't in play, CMake
-# fails to enable support for HIP as a first class language.
-#enable_language(HIP)
+# Because of CMake's current assumption that HIP must require ROCm,
+# we cannot use CMake's support for HIP as a first-class language.
+# So we don't use enable_language() here, or specify it as a language
+# in the project command.
+#
+# We want to find CHIP-SPV's HIP support, which uses 'hip' (lower case)
+# as the name, not 'HIP' (upper case).
+find_package(hip REQUIRED)
 
 # Ensure our users and installed tests will be able to find our
 # dependency libraries.
