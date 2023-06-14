@@ -31,45 +31,46 @@ add_library(HipBLAS SHARED
     util.cpp
     hipblas.cpp)
 target_include_directories(HipBLAS
-	PUBLIC
+    PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include;${CMAKE_BINARY_DIR}/include>"
-		$<INSTALL_INTERFACE:include>)
+        $<INSTALL_INTERFACE:include>)
 
 target_link_libraries(HipBLAS
-	PRIVATE
+    PRIVATE
         HipBLASCommonConfig
         H4I::MKLShim
     PUBLIC
-		hip::host
+        hip::host
     )
 
 # Specify how to install the library.
 include (GNUInstallDirs)
 install(TARGETS HipBLAS
-		EXPORT HipBLAS
+        EXPORT HipBLAS
 )
 install(FILES
-			${CMAKE_BINARY_DIR}/include/hipblas.h
-			${CMAKE_BINARY_DIR}/include/hipblas-version.h
-			${CMAKE_SOURCE_DIR}/include/hipblas-export.h
+            ${CMAKE_BINARY_DIR}/include/hipblas.h
+            ${CMAKE_BINARY_DIR}/include/hipblas-version.h
+            ${CMAKE_SOURCE_DIR}/include/hipblas-export.h
+            ${CMAKE_SOURCE_DIR}/include/cublas_v2.h
         TYPE INCLUDE
 )
 
 install(EXPORT HipBLAS
-	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
-	NAMESPACE H4I::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
+    NAMESPACE H4I::
 )
 
 include(CMakePackageConfigHelpers)
 
 configure_package_config_file(${CMAKE_SOURCE_DIR}/CMake/HipBLASConfig.cmake.in
-	${CMAKE_CURRENT_BINARY_DIR}/HipBLASConfig.cmake
-	PATH_VARS CMAKE_INSTALL_INCLUDEDIR
-	INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
+    ${CMAKE_CURRENT_BINARY_DIR}/HipBLASConfig.cmake
+    PATH_VARS CMAKE_INSTALL_INCLUDEDIR
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
 )
 
 install(FILES
-	${CMAKE_CURRENT_BINARY_DIR}/HipBLASConfig.cmake
-	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
+    ${CMAKE_CURRENT_BINARY_DIR}/HipBLASConfig.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
 )
 
