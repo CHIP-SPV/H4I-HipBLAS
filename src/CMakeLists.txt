@@ -27,15 +27,15 @@ configure_file(
     @ONLY)
 
 # Specify how to build the library.
-add_library(HipBLAS SHARED
+add_library(hipblas SHARED
     util.cpp
     hipblas.cpp)
-target_include_directories(HipBLAS
+target_include_directories(hipblas
 	PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include;${CMAKE_BINARY_DIR}/include>"
 		$<INSTALL_INTERFACE:include>)
 
-target_link_libraries(HipBLAS
+target_link_libraries(hipblas
 	PRIVATE
         HipBLASCommonConfig
         H4I::MKLShim
@@ -45,7 +45,7 @@ target_link_libraries(HipBLAS
 
 # Specify how to install the library.
 include (GNUInstallDirs)
-install(TARGETS HipBLAS
+install(TARGETS hipblas
 		EXPORT HipBLAS
 )
 install(FILES
