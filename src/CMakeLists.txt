@@ -27,19 +27,19 @@ configure_file(
     @ONLY)
 
 # Specify how to build the library.
-add_library(HipBLAS SHARED
+add_library(hipblas SHARED
     util.cpp
     hipblas.cpp)
-target_include_directories(HipBLAS
+target_include_directories(hipblas
 	PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include;${CMAKE_BINARY_DIR}/include>"
 		$<INSTALL_INTERFACE:include>)
 # We need to be sure the ROCm HipBLAS library is downloaded and "installed"
 # (i.e., the hipblas.h header has been copied to the location we want) before
 # we build this library.
-add_dependencies(HipBLAS ROCmHipblas)
+add_dependencies(hipblas ROCmHipblas)
 
-target_link_libraries(HipBLAS
+target_link_libraries(hipblas
 	PRIVATE
         HipBLASCommonConfig
         H4I::MKLShim
@@ -47,10 +47,11 @@ target_link_libraries(HipBLAS
 		hip::host
     )
 
+
 # Specify how to install the library.
 include (GNUInstallDirs)
-install(TARGETS HipBLAS
-		EXPORT HipBLAS
+install(TARGETS hipblas
+        EXPORT hipblas
 )
 install(FILES
 			${CMAKE_BINARY_DIR}/include/hipblas.h
@@ -59,21 +60,21 @@ install(FILES
         TYPE INCLUDE
 )
 
-install(EXPORT HipBLAS
-	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
+install(EXPORT hipblas
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hipblas
 	NAMESPACE H4I::
 )
 
 include(CMakePackageConfigHelpers)
 
 configure_package_config_file(${CMAKE_SOURCE_DIR}/CMake/HipBLASConfig.cmake.in
-	${CMAKE_CURRENT_BINARY_DIR}/HipBLASConfig.cmake
+	${CMAKE_CURRENT_BINARY_DIR}/hipblasConfig.cmake
 	PATH_VARS CMAKE_INSTALL_INCLUDEDIR
-	INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
+	INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hipblas
 )
 
 install(FILES
-	${CMAKE_CURRENT_BINARY_DIR}/HipBLASConfig.cmake
-	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HipBLAS
+	${CMAKE_CURRENT_BINARY_DIR}/hipblasConfig.cmake
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hipblas
 )
 
