@@ -38,18 +38,35 @@ hipblasGetPointerMode(hipblasHandle_t handle, hipblasPointerMode_t* mode)
     return HIPBLAS_STATUS_SUCCESS;
 }
 
+struct HipHandles
+{
+    H4I::MKLShim::NativeHandleArray handles;
+    int nHandles = handles.size();
+
+    void GetNativeHandles(hipStream_t stream)
+    {    
+        // Note this code uses a chipStar extension to the HIP API.
+        // See chipStar documentation for its use.
+        // Both Level Zero and OpenCL backends currently require us
+        // to pass nHandles = 4, and provide space for at least 4 handles.
+        // TODO is there a way to query this info at runtime?
+        hipGetBackendNativeHandles(reinterpret_cast<uintptr_t>(stream),
+            handles.data(), &nHandles);
+    }
+};
+
 hipblasStatus_t
 hipblasCreate(hipblasHandle_t* handle)
 {
     if(handle != nullptr)
     {
-        // HIP supports mutile backends hence query current backend name
-        auto backendName = hipGetBackendName();
-        // Obtain the handles to the back handlers.
-        unsigned long handles[4];
-        int           nHandles = 4;
-        hipGetBackendNativeHandles((uintptr_t)NULL, handles, &nHandles);
-        *handle = H4I::MKLShim::Create(handles, nHandles, backendName);
+        // Determine the backend we're using.
+        auto backend = H4I::MKLShim::ToBackend(hipGetBackendName());
+
+        // Obtain the native backend handles.
+        HipHandles hipHandles;
+        hipHandles.GetNativeHandles(nullptr);
+        *handle = H4I::MKLShim::Create(hipHandles.handles, backend);
     }
     return (*handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
 }
@@ -72,18 +89,11 @@ hipblasSetStream(hipblasHandle_t handle, hipStream_t stream)
     {
         H4I::MKLShim::Context* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
 
-        // Obtain the underlying CHIP-SPV handles.
-        // Note this code uses a CHIP-SPV extension to the HIP API.
-        // See CHIP-SPV documentation for its use.
-        // Both Level Zero and OpenCL backends currently require us
-        // to pass nHandles = 4, and provide space for at least 4 handles.
-        // TODO is there a way to query this info at runtime?
-        int nHandles = H4I::MKLShim::nHandles;
-        std::array<uintptr_t, H4I::MKLShim::nHandles> nativeHandles;
-        hipGetBackendNativeHandles(reinterpret_cast<uintptr_t>(stream),
-                nativeHandles.data(), &nHandles);
+        // Obtain the underlying chipStar handles.
+        HipHandles hipHandles;
+        hipHandles.GetNativeHandles(stream);
 
-        H4I::MKLShim::SetStream(ctxt, nativeHandles);
+        H4I::MKLShim::SetStream(ctxt, hipHandles.handles);
     }
     return (handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
 }
