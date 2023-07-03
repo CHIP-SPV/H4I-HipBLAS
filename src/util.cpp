@@ -7,6 +7,8 @@
 #include "hipblas.h"
 #include "h4i/mklshim/mklshim.h"
 #include "h4i/hipblas/impl/util.h"
+#include "h4i/hiputils/HandleManager.h"
+
 
 // As of now keeping it as global variable, in future
 // it will be part of Context so that different blas context can have it's own pointer mode
@@ -38,65 +40,26 @@ hipblasGetPointerMode(hipblasHandle_t handle, hipblasPointerMode_t* mode)
     return HIPBLAS_STATUS_SUCCESS;
 }
 
-struct HipHandles
-{
-    H4I::MKLShim::NativeHandleArray handles;
-    int nHandles = handles.size();
-
-    void GetNativeHandles(hipStream_t stream)
-    {    
-        // Note this code uses a chipStar extension to the HIP API.
-        // See chipStar documentation for its use.
-        // Both Level Zero and OpenCL backends currently require us
-        // to pass nHandles = 4, and provide space for at least 4 handles.
-        // TODO is there a way to query this info at runtime?
-        hipGetBackendNativeHandles(reinterpret_cast<uintptr_t>(stream),
-            handles.data(), &nHandles);
-    }
-};
+static H4I::HIPUtils::HandleManager<hipblasHandle_t, hipblasStatus_t, HIPBLAS_STATUS_SUCCESS, HIPBLAS_STATUS_HANDLE_IS_NULLPTR> hmgr;
 
 hipblasStatus_t
 hipblasCreate(hipblasHandle_t* handle)
 {
-    if(handle != nullptr)
-    {
-        // Determine the backend we're using.
-        auto backend = H4I::MKLShim::ToBackend(hipGetBackendName());
-
-        // Obtain the native backend handles.
-        HipHandles hipHandles;
-        hipHandles.GetNativeHandles(nullptr);
-        *handle = H4I::MKLShim::Create(hipHandles.handles, backend);
-    }
-    return (*handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
+    return hmgr.Create(handle);
 }
 
 hipblasStatus_t
 hipblasDestroy(hipblasHandle_t handle)
 {
-    if(handle != nullptr)
-    {
-        H4I::MKLShim::Context* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-        H4I::MKLShim::Destroy(ctxt);
-    }
-    return (handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
+    return hmgr.Destroy(handle);
 }
 
 hipblasStatus_t
 hipblasSetStream(hipblasHandle_t handle, hipStream_t stream)
 {
-    if(handle != nullptr)
-    {
-        H4I::MKLShim::Context* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
-
-        // Obtain the underlying chipStar handles.
-        HipHandles hipHandles;
-        hipHandles.GetNativeHandles(stream);
-
-        H4I::MKLShim::SetStream(ctxt, hipHandles.handles);
-    }
-    return (handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
+    return hmgr.SetStream(handle, stream);
 }
+
 
 hipblasStatus_t
 hipblasSetVector(int n, int elemSize, const void* x, int incx, void* y, int incy)
