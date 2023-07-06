@@ -60,6 +60,12 @@ hipblasSetStream(hipblasHandle_t handle, hipStream_t stream)
     return hmgr.SetStream(handle, stream);
 }
 
+hipblasStatus_t
+hipblasGetStream(hipblasHandle_t handle, hipStream_t* stream)
+{
+    return hmgr.GetStream(handle, stream);
+}
+
 
 hipblasStatus_t
 hipblasSetVector(int n, int elemSize, const void* x, int incx, void* y, int incy)
