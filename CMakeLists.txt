@@ -1,7 +1,14 @@
 # Copyright 2021-2023 UT-Battelle
 # See LICENSE.txt in the root of the source distribution for license info.
 cmake_minimum_required(VERSION 3.20)
-include (${CMAKE_SOURCE_DIR}/CMake/HipBLASVersion.cmake)
+
+# make sure the file pointed by LLVM_COMPILER exists
+if(NOT DEFINED ${LLVM_COMPILER})
+    message(FATAL_ERROR "LLVM_COMPILER must be set to the path of the LLVM compiler")
+endif()
+set(CMAKE_CXX_COMPILER ${LLVM_COMPILER})
+
+include (${CMAKE_CURRENT_SOURCE_DIR}/CMake/HipBLASVersion.cmake)
 project(HipBLAS
     VERSION ${HipBLAS_VERSION}
     LANGUAGES CXX)
@@ -16,7 +23,7 @@ project(HipBLAS
 #
 # We want to find CHIP-SPV's HIP support, which uses 'hip' (lower case)
 # as the name, not 'HIP' (upper case).
-find_package(hip REQUIRED)
+find_package(hip CONFIG REQUIRED)
 
 # Ensure our users and installed tests will be able to find our
 # dependency libraries.

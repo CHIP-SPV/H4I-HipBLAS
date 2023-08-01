@@ -1,8 +1,12 @@
 # Copyright 2021-2023 UT-Battelle
 # See LICENSE.txt in the root of the source distribution for license info.
 
-# We rely on the MKL shim library.
-find_package(MKLShim REQUIRED)
+# set the default CMAKE_INSTALL_PREFIX to the current directory/install
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "..." FORCE)
+endif()
+
+
 
 # To aid portability between our implementation and
 # the ROCm hipBLAS implementation, we use the ROCm
@@ -17,12 +21,12 @@ ExternalProject_Add(ROCmHipblas
     PATCH_COMMAND ""
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
-    INSTALL_COMMAND sh ${CMAKE_SOURCE_DIR}/Scripts/install-hipblas-header.sh <SOURCE_DIR> ${CMAKE_BINARY_DIR} ${CMAKE_INSTALL_PREFIX}
+    INSTALL_COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/../Scripts/install-hipblas-header.sh <SOURCE_DIR> ${CMAKE_BINARY_DIR} ${CMAKE_INSTALL_PREFIX}
 )
 
 # Product the hipblas version header required by hipblas.h in recent ROCm versions.
 configure_file(
-    ${CMAKE_SOURCE_DIR}/include/hipblas-version.h.in
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include/hipblas-version.h.in
     ${CMAKE_BINARY_DIR}/include/hipblas-version.h
     @ONLY)
 
@@ -32,17 +36,25 @@ add_library(hipblas SHARED
     hipblas.cpp)
 target_include_directories(hipblas
 	PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include;${CMAKE_BINARY_DIR}/include>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include;${CMAKE_BINARY_DIR}/include>"
 		$<INSTALL_INTERFACE:include>)
 # We need to be sure the ROCm HipBLAS library is downloaded and "installed"
 # (i.e., the hipblas.h header has been copied to the location we want) before
 # we build this library.
 add_dependencies(hipblas ROCmHipblas)
 
+# We rely on the MKL shim library.
+if(PROJECT_IS_TOP_LEVEL)
+    find_package(MKLShim REQUIRED)
+    set(MKL_SHIM H4I::MKLShim)
+else()
+    add_dependencies(hipblas MKLShim)
+    set(MKL_SHIM MKLShim)
+endif()
 target_link_libraries(hipblas
 	PRIVATE
         HipBLASCommonConfig
-        H4I::MKLShim
+        ${MKL_SHIM}
     PUBLIC
 		hip::host
     )
@@ -56,7 +68,7 @@ install(TARGETS hipblas
 install(FILES
 			${CMAKE_BINARY_DIR}/include/hipblas.h
 			${CMAKE_BINARY_DIR}/include/hipblas-version.h
-			${CMAKE_SOURCE_DIR}/include/hipblas-export.h
+			${CMAKE_CURRENT_SOURCE_DIR}/../include/hipblas-export.h
         TYPE INCLUDE
 )
 
@@ -67,7 +79,7 @@ install(EXPORT hipblas
 
 include(CMakePackageConfigHelpers)
 
-configure_package_config_file(${CMAKE_SOURCE_DIR}/CMake/HipBLASConfig.cmake.in
+configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/../CMake/HipBLASConfig.cmake.in
 	${CMAKE_CURRENT_BINARY_DIR}/hipblasConfig.cmake
 	PATH_VARS CMAKE_INSTALL_INCLUDEDIR
 	INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hipblas
