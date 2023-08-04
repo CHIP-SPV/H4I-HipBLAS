@@ -1,18 +1,29 @@
 # Copyright 2021-2023 UT-Battelle
 # See LICENSE.txt in the root of the source distribution for license info.
+
 cmake_minimum_required(VERSION 3.20)
 
-# make sure the file pointed by LLVM_COMPILER exists
-if(NOT DEFINED ${LLVM_COMPILER})
-    message(FATAL_ERROR "LLVM_COMPILER must be set to the path of the LLVM compiler")
+# set the default CMAKE_INSTALL_PREFIX to the current directory/install
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "..." FORCE)
 endif()
-set(CMAKE_CXX_COMPILER ${LLVM_COMPILER})
+
+# print where MKLShim layer will be installed
+message(STATUS "H4I-HipBLAS will be installed to: ${CMAKE_INSTALL_PREFIX}")
 
 include (${CMAKE_CURRENT_SOURCE_DIR}/CMake/HipBLASVersion.cmake)
 project(HipBLAS
     VERSION ${HipBLAS_VERSION}
     LANGUAGES CXX)
 
+# check if CLANG_COMPILER_PATH was passed to CMake invocation, if not, look for clang++ in PATH
+if(NOT DEFINED CLANG_COMPILER_PATH)
+    find_program(CLANG_COMPILER_PATH clang++ REQUIRED)
+    message(STATUS "Found LLVM C++ Compiler: ${CLANG_COMPILER_PATH}")
+endif()
+
+set(CMAKE_CXX_COMPILER ${CLANG_COMPILER_PATH})
+set(CMAKE_CXX_COMPILER_ID "LLVM")
 
 # We will use HIP in some fashion, no matter which platform
 # we're targeting or what parts of the software we're building.
