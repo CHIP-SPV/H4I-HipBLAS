@@ -51,10 +51,15 @@ else()
     add_dependencies(hipblas MKLShim)
     set(MKL_SHIM MKLShim)
 endif()
+
+# We rely on the H4I HipUtils library.
+find_package(hiputils REQUIRED)
+
 target_link_libraries(hipblas
 	PRIVATE
         HipBLASCommonConfig
         ${MKL_SHIM}
+        H4I::hiputils
     PUBLIC
 		hip::host
     )
