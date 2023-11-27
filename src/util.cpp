@@ -8,25 +8,7 @@
 #include "h4i/mklshim/mklshim.h"
 #include "h4i/hipblas/impl/util.h"
 
-bool is_mkl_verion_gt_2023_0_2 = false; // Indicates current mkl version >= 2013.0.2
-void getMKLVersion() {
-    H4I::MKLShim::MKL_VERSION mkl_version = H4I::MKLShim::get_mkl_version();
-    if (mkl_version.major > 2023){
-        is_mkl_verion_gt_2023_0_2 = true;
-        return;
-    } else if(mkl_version.major == 2023) {
-        if (mkl_version.minor > 0) {
-            is_mkl_verion_gt_2023_0_2 = true;
-            return;
-        } else if (mkl_version.minor == 0){
-            if (mkl_version.patch >= 2){
-                is_mkl_verion_gt_2023_0_2 = true;
-                return;
-            }
-        }
-    }
-    is_mkl_verion_gt_2023_0_2 = false;
-}
+
 
 // As of now keeping it as global variable, in future
 // it will be part of Context so that different blas context can have it's own pointer mode
@@ -61,9 +43,6 @@ hipblasGetPointerMode(hipblasHandle_t handle, hipblasPointerMode_t* mode)
 hipblasStatus_t
 hipblasCreate(hipblasHandle_t* handle)
 {
-    // Update mkl version first as it will be needed to decide which WA to use
-    getMKLVersion();
-
     if(handle != nullptr)
     {
         // HIP supports mutile backends hence query current backend name

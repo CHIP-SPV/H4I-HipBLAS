@@ -29,4 +29,3 @@ ToMKLShimOp(hipblasOperation_t op)
     return map[op];
 }
 
-extern bool is_mkl_verion_gt_2023_0_2;
