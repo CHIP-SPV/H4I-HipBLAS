@@ -511,7 +511,9 @@ hipblasStatus_t hipblasIsamax(hipblasHandle_t handle, int n, const float* x, int
   // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
   int64_t results_host_memory = 0;
   hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
-  results_host_memory += 1;
+  if (!H4I::MKLShim::is_mkl_eq_higher_2023_0_2()) {
+    results_host_memory += 1;
+  }
 
   int return_val = (int)results_host_memory;
   if (is_result_dev_ptr) {
@@ -557,7 +559,9 @@ hipblasStatus_t hipblasIdamax(hipblasHandle_t handle, int n, const double* x, in
   // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
   int64_t results_host_memory = 0;
   hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
-  results_host_memory += 1;
+  if (!H4I::MKLShim::is_mkl_eq_higher_2023_0_2()) {
+    results_host_memory += 1;
+  }
 
   int return_val = (int)results_host_memory;
   if (is_result_dev_ptr) {
@@ -603,7 +607,9 @@ hipblasStatus_t hipblasIcamax(hipblasHandle_t handle, int n, const hipblasComple
   // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
   int64_t results_host_memory = 0;
   hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
-  results_host_memory += 1;
+  if (!H4I::MKLShim::is_mkl_eq_higher_2023_0_2()) {
+    results_host_memory += 1;
+  }
 
   int return_val = (int)results_host_memory;
   if (is_result_dev_ptr) {
@@ -649,7 +655,9 @@ hipblasStatus_t hipblasIzamax(hipblasHandle_t handle, int n, const hipblasDouble
   // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
   int64_t results_host_memory = 0;
   hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
-  results_host_memory += 1;
+  if (!H4I::MKLShim::is_mkl_eq_higher_2023_0_2()) {
+    results_host_memory += 1;
+  }
 
   int return_val = (int)results_host_memory;
   if (is_result_dev_ptr) {
@@ -773,7 +781,9 @@ hipblasStatus_t hipblasIsamin(hipblasHandle_t handle, int n, const float* x, int
   // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
   int64_t results_host_memory = 0;
   hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
-  results_host_memory += 1;
+  if (!H4I::MKLShim::is_mkl_eq_higher_2023_0_2()) {
+    results_host_memory += 1;
+  }
 
   int return_val = (int)results_host_memory;
   if (is_result_dev_ptr) {
@@ -804,9 +814,9 @@ hipblasStatus_t hipblasIdamin(hipblasHandle_t handle, int n, const double* x, in
   }
 
   // error checks
-    if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0) {
-        return HIPBLAS_STATUS_INVALID_VALUE;
-    }
+  if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
 
   int64_t *dev_results = nullptr;
   hip_status = hipMalloc(&dev_results, sizeof(int64_t));
@@ -819,7 +829,9 @@ hipblasStatus_t hipblasIdamin(hipblasHandle_t handle, int n, const double* x, in
   // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
   int64_t results_host_memory = 0;
   hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
-  results_host_memory += 1;
+  if (!H4I::MKLShim::is_mkl_eq_higher_2023_0_2()) {
+    results_host_memory += 1;
+  }
 
   int return_val = (int)results_host_memory;
   if (is_result_dev_ptr) {
@@ -865,7 +877,9 @@ hipblasStatus_t hipblasIcamin(hipblasHandle_t handle, int n, const hipblasComple
   // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
   int64_t results_host_memory = 0;
   hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
-  results_host_memory += 1;
+  if (!H4I::MKLShim::is_mkl_eq_higher_2023_0_2()) {
+    results_host_memory += 1;
+  }
 
   int return_val = (int)results_host_memory;
   if (is_result_dev_ptr) {
@@ -911,7 +925,9 @@ hipblasStatus_t hipblasIzamin(hipblasHandle_t handle, int n, const hipblasDouble
   // 2.'result' in hipBLAS is 'int' but oneMKL accepts int64_t hence copying in stagging buffer and then copying it back to result
   int64_t results_host_memory = 0;
   hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
-  results_host_memory += 1;
+  if (!H4I::MKLShim::is_mkl_eq_higher_2023_0_2()) {
+    results_host_memory += 1;
+  }
 
   int return_val = (int)results_host_memory;
   if (is_result_dev_ptr) {

@@ -8,6 +8,8 @@
 #include "h4i/mklshim/mklshim.h"
 #include "h4i/hipblas/impl/util.h"
 
+
+
 // As of now keeping it as global variable, in future
 // it will be part of Context so that different blas context can have it's own pointer mode
 std::atomic<int> POINTER_MODE;
