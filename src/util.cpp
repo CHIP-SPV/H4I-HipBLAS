@@ -45,15 +45,13 @@ hipblasCreate(hipblasHandle_t* handle)
 {
     if(handle != nullptr)
     {
-        // HIP supports mutile backends hence query current backend name
-        auto backendName = hipGetBackendName();
         // Obtain the handles to the back handlers.
         int nHandles;
         hipGetBackendNativeHandles((uintptr_t)0, 0, &nHandles);
 
         unsigned long handles[nHandles];
         hipGetBackendNativeHandles((uintptr_t)NULL, handles, 0);
-        *handle = H4I::MKLShim::Create(handles, nHandles, backendName);
+        *handle = H4I::MKLShim::Create(handles, nHandles);
     }
     return (*handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
 }
