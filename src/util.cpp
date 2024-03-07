@@ -45,13 +45,22 @@ hipblasCreate(hipblasHandle_t* handle)
 {
     if(handle != nullptr)
     {
-        // Obtain the handles to the back handlers.
+        #ifndef hipGetBackendName // new chipStar interop API doesn't provide hipGetBackendName
         int nHandles;
         hipGetBackendNativeHandles((uintptr_t)0, 0, &nHandles);
 
         unsigned long handles[nHandles];
         hipGetBackendNativeHandles((uintptr_t)NULL, handles, 0);
         *handle = H4I::MKLShim::Create(handles, nHandles);
+        #else
+        // HIP supports mutile backends hence query current backend name
+        auto backendName = hipGetBackendName();
+        // Obtain the handles to the back handlers.
+        unsigned long handles[4];
+        int           nHandles = 4;
+        hipGetBackendNativeHandles((uintptr_t)NULL, handles, &nHandles);
+        *handle = H4I::MKLShim::Create(handles, nHandles, backendName);
+        #endif
     }
     return (*handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
 }
