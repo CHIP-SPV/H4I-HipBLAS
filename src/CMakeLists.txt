@@ -1,13 +1,6 @@
 # Copyright 2021-2023 UT-Battelle
 # See LICENSE.txt in the root of the source distribution for license info.
 
-# set the default CMAKE_INSTALL_PREFIX to the current directory/install
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-    set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "..." FORCE)
-endif()
-
-
-
 # To aid portability between our implementation and
 # the ROCm hipBLAS implementation, we use the ROCm
 # hipBLAS library's hipblas.h header.
@@ -72,10 +65,13 @@ install(FILES
         TYPE INCLUDE
 )
 
-install(EXPORT hipblas
-	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hipblas
-	NAMESPACE H4I::
-)
+if (NOT STANDALONE_BUILD)
+    install(EXPORT hipblas
+            FILE hipblasTargets.cmake
+            NAMESPACE H4I::
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/hipblas
+    )
+endif()
 
 include(CMakePackageConfigHelpers)
 
