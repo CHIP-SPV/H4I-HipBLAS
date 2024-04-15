@@ -40,7 +40,7 @@ set(CMAKE_CXX_COMPILER_ID "LLVM")
 #
 # We want to find CHIP-SPV's HIP support, which uses 'hip' (lower case)
 # as the name, not 'HIP' (upper case).
-if(NOT STANDALONE_BUILD)
+if(STANDALONE_BUILD)
   find_package(hip CONFIG REQUIRED)
 endif()
 

@@ -65,7 +65,7 @@ install(FILES
         TYPE INCLUDE
 )
 
-if (NOT STANDALONE_BUILD)
+if (STANDALONE_BUILD)
     install(EXPORT hipblas
             FILE hipblasTargets.cmake
             NAMESPACE H4I::
