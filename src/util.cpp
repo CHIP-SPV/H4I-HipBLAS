@@ -52,6 +52,13 @@ hipblasCreate(hipblasHandle_t* handle)
         unsigned long handles[nHandles];
         hipGetBackendNativeHandles((uintptr_t)NULL, handles, 0);
         char* backendName = (char*)handles[0];
+        // New implementation of hipGetBackendNativeHandles keep backend name in the Native handles
+        // Removing backend name from the list to make it sync to older native handle. This will help Shim layer remains unchanged
+        for(auto i=1; i<nHandles; ++i) {
+            handles[i-1] = handles[i];
+        }
+        handles[nHandles-1] = 0;
+        nHandles--;
         *handle = H4I::MKLShim::Create(handles, nHandles, backendName);
         #else
         // HIP supports mutile backends hence query current backend name
