@@ -3,8 +3,14 @@
 
 cmake_minimum_required(VERSION 3.20)
 
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(STANDALONE_BUILD ON)
+else()
+    set(STANDALONE_BUILD OFF)
+endif()
+
 # set the default CMAKE_INSTALL_PREFIX to the current directory/install
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+if(STANDALONE_BUILD AND CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "..." FORCE)
 endif()
 
@@ -34,7 +40,9 @@ set(CMAKE_CXX_COMPILER_ID "LLVM")
 #
 # We want to find CHIP-SPV's HIP support, which uses 'hip' (lower case)
 # as the name, not 'HIP' (upper case).
-find_package(hip CONFIG REQUIRED)
+if(STANDALONE_BUILD)
+  find_package(hip CONFIG REQUIRED)
+endif()
 
 # Ensure our users and installed tests will be able to find our
 # dependency libraries.
