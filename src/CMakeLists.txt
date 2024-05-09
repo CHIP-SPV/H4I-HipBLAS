@@ -65,6 +65,11 @@ install(FILES
         TYPE INCLUDE
 )
 
+install(FILES
+    ${CMAKE_BINARY_DIR}/include/hipblas.h
+    DESTINATION include/hipblas
+)
+
 if (STANDALONE_BUILD)
     install(EXPORT hipblas
             FILE hipblasTargets.cmake
