@@ -17,7 +17,7 @@ endif()
 if(NOT DEFINED HIP_VERSION_PATCH)
     message(FATAL_ERROR "HIP_VERSION_PATCH is not defined")
 endif()
-set(H4I_ROCM_HIPBLAS_TAG "rocm-${HIP_VERSION_MAJOR}.${HIP_VERSION_MINOR}.${HIP_VERSION_PATCH}" CACHE STRING "Tag to use from the ROCm hipBLAS repository when obtaining its hipblas.h header")
+set(H4I_ROCM_HIPBLAS_TAG "rocm-6.1.1" CACHE STRING "Tag to use from the ROCm hipBLAS repository when obtaining its hipblas.h header")
 ExternalProject_Add(ROCmHipblas
     GIT_REPOSITORY https://github.com/ROCmSoftwarePlatform/hipblas
     GIT_TAG ${H4I_ROCM_HIPBLAS_TAG}
