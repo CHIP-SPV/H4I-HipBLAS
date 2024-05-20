@@ -5,19 +5,7 @@
 # the ROCm hipBLAS implementation, we use the ROCm
 # hipBLAS library's hipblas.h header.
 include(ExternalProject)
-# make sure that HIP_VERSION_MAJOR, HIP_VERSION_MINOR, and HIP_VERSION_PATCH are defined
-if(NOT DEFINED HIP_VERSION_MAJOR)
-    message(FATAL_ERROR "HIP_VERSION_MAJOR is not defined")
-endif()
-
-if(NOT DEFINED HIP_VERSION_MINOR)
-    message(FATAL_ERROR "HIP_VERSION_MINOR is not defined")
-endif()
-
-if(NOT DEFINED HIP_VERSION_PATCH)
-    message(FATAL_ERROR "HIP_VERSION_PATCH is not defined")
-endif()
-set(H4I_ROCM_HIPBLAS_TAG "rocm-6.1.1" CACHE STRING "Tag to use from the ROCm hipBLAS repository when obtaining its hipblas.h header")
+option(H4I_ROCM_HIPBLAS_TAG "Tag to use from the ROCm hipBLAS repository when obtaining its hipblas.h header" "rocm-6.1.1")
 ExternalProject_Add(ROCmHipblas
     GIT_REPOSITORY https://github.com/ROCmSoftwarePlatform/hipblas
     GIT_TAG ${H4I_ROCM_HIPBLAS_TAG}
