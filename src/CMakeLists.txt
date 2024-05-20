@@ -5,7 +5,7 @@
 # the ROCm hipBLAS implementation, we use the ROCm
 # hipBLAS library's hipblas.h header.
 include(ExternalProject)
-option(H4I_ROCM_HIPBLAS_TAG "Tag to use from the ROCm hipBLAS repository when obtaining its hipblas.h header" "rocm-5.3.0")
+option(H4I_ROCM_HIPBLAS_TAG "Tag to use from the ROCm hipBLAS repository when obtaining its hipblas.h header" "rocm-6.1.1")
 ExternalProject_Add(ROCmHipblas
     GIT_REPOSITORY https://github.com/ROCmSoftwarePlatform/hipblas
     GIT_TAG ${H4I_ROCM_HIPBLAS_TAG}
