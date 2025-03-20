@@ -87,25 +87,45 @@ hipblasDestroy(hipblasHandle_t handle)
 hipblasStatus_t
 hipblasSetStream(hipblasHandle_t handle, hipStream_t stream)
 {
-    if(handle != nullptr)
-    {
-        H4I::MKLShim::Context* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  if(handle != nullptr)
+  {
+    //todo: add return error check
+#ifndef hipGetBackendName
+    //this is a context with the native handles and the NULL stream
+    H4I::MKLShim::Context* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+      // Obtain the backendnativehandles for the stream we want to use
+      int nHandles;
+      hipGetBackendNativeHandles( reinterpret_cast<uintptr_t>(stream), 0, &nHandles);
+      unsigned long handles[nHandles];
+      hipGetBackendNativeHandles(reinterpret_cast<uintptr_t>(stream),
+              handles, 0);
+      char* backendName = (char*)handles[0];
+      // New implementation of hipGetBackendNativeHandles keep backend name in the Native handles
+      // Removing backend name from the list to make it sync to older native handle. This will help Shim layer remains unchanged
+      for(auto i=1; i<nHandles; ++i) {
+          handles[i-1] = handles[i];
+      }
+      handles[nHandles-1] = 0;
+      nHandles--;
 
-        // Obtain the underlying CHIP-SPV handles.
-        // Note this code uses a CHIP-SPV extension to the HIP API.
-        // See CHIP-SPV documentation for its use.
-        // Both Level Zero and OpenCL backends currently require us
-        // to pass nHandles = 4, and provide space for at least 4 handles.
-        // TODO is there a way to query this info at runtime?
-        int nHandles = H4I::MKLShim::nHandles;
-        std::array<uintptr_t, H4I::MKLShim::nHandles> nativeHandles;
-        hipGetBackendNativeHandles(reinterpret_cast<uintptr_t>(stream),
-                nativeHandles.data(), &nHandles);
+      //set ctext to use handles from stream
+      //      H4I::MKLShim::Update(ctxt, handles, nHandles, backendName);
+#else
+      H4I::MKLShim::Context* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+      // HIP supports mutile backends hence query current backend name
+      auto backendName = hipGetBackendName();
+      // Obtain the handles to the back handlers.
+      unsigned long handles[4];
+      int           nHandles = 4;
+      hipGetBackendNativeHandles(reinterpret_cast<uintptr_t>(stream), handles, &nHandles);
+      //      H4I::MKLShim::Update(ctxt,handles, nHandles, backendName);
 
-        H4I::MKLShim::SetStream(ctxt, nativeHandles);
-    }
+#endif      
+      H4I::MKLShim::SetStream(ctxt, handles, nHandles, backendName);
+
+  }
     return (handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
-}
+    }
 
 hipblasStatus_t
 hipblasSetVector(int n, int elemSize, const void* x, int incx, void* y, int incy)
