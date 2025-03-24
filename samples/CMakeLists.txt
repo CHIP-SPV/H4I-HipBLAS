@@ -12,4 +12,4 @@ endif()
 install(TARGETS blas_basic_test DESTINATION bin)
 
 # Add the test to CTest
-add_test(NAME hipblas_basic_context_test COMMAND blas_basic_test) 
+add_test(NAME h4i-hipblas_basic_context_test COMMAND blas_basic_test) 
