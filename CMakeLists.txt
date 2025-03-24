@@ -88,3 +88,6 @@ if(BUILD_TESTING)
     add_subdirectory(test)
 endif()
 
+# Always build samples
+add_subdirectory(samples)
+
