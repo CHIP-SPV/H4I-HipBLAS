@@ -40,8 +40,14 @@ set(CMAKE_CXX_COMPILER_ID "LLVM")
 #
 # We want to find CHIP-SPV's HIP support, which uses 'hip' (lower case)
 # as the name, not 'HIP' (upper case).
+if(POLICY CMP0077)
+  cmake_policy(SET CMP0077 NEW)
+endif()
 if(STANDALONE_BUILD)
   find_package(hip CONFIG REQUIRED)
+  set(HIP_LINK_LIBRARIES hip::host)
+else()
+  set(HIP_LINK_LIBRARIES host)
 endif()
 
 # Ensure our users and installed tests will be able to find our
@@ -87,4 +93,7 @@ include(CTest)
 if(BUILD_TESTING)
     add_subdirectory(test)
 endif()
+
+# Always build samples
+add_subdirectory(samples)
 
