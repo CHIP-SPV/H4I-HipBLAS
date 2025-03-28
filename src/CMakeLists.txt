@@ -48,9 +48,9 @@ endif()
 target_link_libraries(hipblas
 	PRIVATE
         HipBLASCommonConfig
-        ${MKL_SHIM}
+        ${HIP_LINK_LIBRARIES}
     PUBLIC
-		hip::host
+        ${MKL_SHIM}
     )
 
 
