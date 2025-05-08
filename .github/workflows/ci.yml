@@ -1,0 +1,47 @@
+name: H4I-HipBLAS CI
+
+on:
+  pull_request:
+    branches: [ "develop" ]
+  workflow_dispatch:
+    
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_test:
+    runs-on: [self-hosted, X64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: oneapi/2024.1.0
+        shell: bash
+        run: |
+          source /home/pvelesko/install/modules/init/bash
+          module use /home/pvelesko/modulefiles
+          module purge
+          module load llvm/20.0 HIP/chipStar/main oneapi/2024.1.0 HIP/H4I-MKLShim/oneapi-2024.1.0
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_INSTALL_PREFIX=/home/pvelesko/install/HIP/H4I-HipBLAS/oneapi-2024.1.0 -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          make -j$(nproc)
+          CHIP_BE=opencl ctest --output-on-failure -j$(nproc)
+          CHIP_BE=level0 ctest --output-on-failure -j$(nproc)
+
+      - name: oneapi/2025.0.4
+        shell: bash
+        run: |
+          source /home/pvelesko/install/modules/init/bash
+          module use /home/pvelesko/modulefiles
+          module purge
+          module load llvm/20.0 HIP/chipStar/main oneapi/2025.0.4 HIP/H4I-MKLShim/oneapi-2025.0.4
+          rm -rf build
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_INSTALL_PREFIX=/home/pvelesko/install/HIP/H4I-HipBLAS/oneapi-2025.0.4 -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          make -j$(nproc)
+          CHIP_BE=opencl ctest --output-on-failure -j$(nproc)
+          CHIP_BE=level0 ctest --output-on-failure -j$(nproc)
