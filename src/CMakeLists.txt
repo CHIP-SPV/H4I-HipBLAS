@@ -39,6 +39,8 @@ add_dependencies(hipblas ROCmHipblas)
 
 # We rely on the MKL shim library.
 if(PROJECT_IS_TOP_LEVEL)
+    # Pass MKL threading option to MKLShim when finding it
+    set(MKLShim_MKL_THREADING ${MKL_THREADING})
     find_package(MKLShim REQUIRED)
     set(MKL_SHIM H4I::MKLShim)
 else()
