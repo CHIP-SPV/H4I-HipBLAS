@@ -26,6 +26,7 @@ jobs:
           module load llvm/20.0 HIP/chipStar/main oneapi/2024.1.0 HIP/H4I-MKLShim/oneapi-2024.1.0
           export IGC_EnableDPEmulation=1
           export OverrideDefaultFP64Settings=1
+          export CHIP_LOGLEVEL=err
           mkdir build
           cd build
           cmake .. -DCMAKE_INSTALL_PREFIX=/home/pvelesko/install/HIP/H4I-HipBLAS/oneapi-2024.1.0 -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -42,6 +43,7 @@ jobs:
           module load llvm/20.0 HIP/chipStar/main oneapi/2025.0.4 HIP/H4I-MKLShim/oneapi-2025.0.4
           export IGC_EnableDPEmulation=1
           export OverrideDefaultFP64Settings=1
+          export CHIP_LOGLEVEL=err
           rm -rf build
           mkdir build
           cd build
