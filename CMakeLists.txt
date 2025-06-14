@@ -88,6 +88,12 @@ if(NOT H4I_USE_ROCM_HIPBLAS)
     add_subdirectory(src)
 endif()
 
+# Option for configuring MKL threading mode
+# Based on Intel oneAPI MKL threading libraries: sequential, intel_thread, gnu_thread, tbb_thread, pgi_thread
+set(MKL_THREADING "sequential" CACHE STRING "MKL threading mode (sequential, intel_thread, gnu_thread, tbb_thread, pgi_thread)")
+set_property(CACHE MKL_THREADING PROPERTY STRINGS "sequential" "intel_thread" "gnu_thread" "tbb_thread" "pgi_thread")
+message(STATUS "MKL threading mode set to: ${MKL_THREADING}")
+
 # Build tests if desired.
 include(CTest)
 if(BUILD_TESTING)
