@@ -6,6 +6,7 @@
 #include "h4i/mklshim/mklshim.h"
 #include "h4i/mklshim/onemklblas.h"
 #include "h4i/hipblas/impl/util.h"
+#include <vector>
 
 #define HIPBLAS_TRY \
   if (handle == nullptr) {\
@@ -9114,7 +9115,34 @@ hipblasStatus_t hipblasSgemmBatched(hipblasHandle_t    handle,
                                     float* const       C[],
                                     int                ldc,
                                     int                batchCount) {
-  return HIPBLAS_STATUS_NOT_SUPPORTED;
+  HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || 
+      C == nullptr || beta == nullptr || m <= 0 || n <= 0 || k <= 0 || 
+      lda <= 0 || ldb <= 0 || ldc <= 0 || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Get alpha and beta values (handle device/host pointer modes)
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  
+  float h_alpha, h_beta;
+  if (is_dev_ptr) {
+    hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
+    hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
+  } else {
+    h_alpha = *alpha;
+    h_beta = *beta;
+  }
+  
+  // Use proper MKLShim batch GEMM
+  H4I::MKLShim::sGemmBatched(ctxt, convert(transa), convert(transb), m, n, k,
+                             h_alpha, A, lda, B, ldb, h_beta, C, ldc, batchCount);
+  
+  HIPBLAS_CATCH("SGEMMBATCHED")
 }
 
 hipblasStatus_t hipblasDgemmBatched(hipblasHandle_t     handle,
@@ -9132,7 +9160,34 @@ hipblasStatus_t hipblasDgemmBatched(hipblasHandle_t     handle,
                                     double* const       C[],
                                     int                 ldc,
                                     int                 batchCount) {
-  return HIPBLAS_STATUS_NOT_SUPPORTED;
+  HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || 
+      C == nullptr || beta == nullptr || m <= 0 || n <= 0 || k <= 0 || 
+      lda <= 0 || ldb <= 0 || ldc <= 0 || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Get alpha and beta values (handle device/host pointer modes)
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  
+  double h_alpha, h_beta;
+  if (is_dev_ptr) {
+    hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
+    hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
+  } else {
+    h_alpha = *alpha;
+    h_beta = *beta;
+  }
+  
+  // Use proper MKLShim batch GEMM
+  H4I::MKLShim::dGemmBatched(ctxt, convert(transa), convert(transb), m, n, k,
+                             h_alpha, A, lda, B, ldb, h_beta, C, ldc, batchCount);
+  
+  HIPBLAS_CATCH("DGEMMBATCHED")
 }
 
 hipblasStatus_t hipblasCgemmBatched(hipblasHandle_t             handle,
@@ -9150,7 +9205,36 @@ hipblasStatus_t hipblasCgemmBatched(hipblasHandle_t             handle,
                                     hipblasComplex* const       C[],
                                     int                         ldc,
                                     int                         batchCount) {
-  return HIPBLAS_STATUS_NOT_SUPPORTED;
+  HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || 
+      C == nullptr || beta == nullptr || m <= 0 || n <= 0 || k <= 0 || 
+      lda <= 0 || ldb <= 0 || ldc <= 0 || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Get alpha and beta values (handle device/host pointer modes)
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  
+  float _Complex h_alpha, h_beta;
+  if (is_dev_ptr) {
+    hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
+    hipMemcpy(&h_beta, beta, sizeof(float _Complex), hipMemcpyDefault);
+  } else {
+    h_alpha = *((float _Complex*)alpha);
+    h_beta = *((float _Complex*)beta);
+  }
+  
+  // Use proper MKLShim batch GEMM
+  H4I::MKLShim::cGemmBatched(ctxt, convert(transa), convert(transb), m, n, k,
+                             h_alpha, (const float _Complex**)A, lda, 
+                             (const float _Complex**)B, ldb, h_beta, 
+                             (float _Complex**)C, ldc, batchCount);
+  
+  HIPBLAS_CATCH("CGEMMBATCHED")
 }
 
 hipblasStatus_t hipblasZgemmBatched(hipblasHandle_t                   handle,
@@ -9168,7 +9252,36 @@ hipblasStatus_t hipblasZgemmBatched(hipblasHandle_t                   handle,
                                     hipblasDoubleComplex* const       C[],
                                     int                               ldc,
                                     int                               batchCount) {
-  return HIPBLAS_STATUS_NOT_SUPPORTED;
+  HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || 
+      C == nullptr || beta == nullptr || m <= 0 || n <= 0 || k <= 0 || 
+      lda <= 0 || ldb <= 0 || ldc <= 0 || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Get alpha and beta values (handle device/host pointer modes)
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  
+  double _Complex h_alpha, h_beta;
+  if (is_dev_ptr) {
+    hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
+    hipMemcpy(&h_beta, beta, sizeof(double _Complex), hipMemcpyDefault);
+  } else {
+    h_alpha = *((double _Complex*)alpha);
+    h_beta = *((double _Complex*)beta);
+  }
+  
+  // Use proper MKLShim batch GEMM
+  H4I::MKLShim::zGemmBatched(ctxt, convert(transa), convert(transb), m, n, k,
+                             h_alpha, (const double _Complex**)A, lda, 
+                             (const double _Complex**)B, ldb, h_beta, 
+                             (double _Complex**)C, ldc, batchCount);
+  
+  HIPBLAS_CATCH("ZGEMMBATCHED")
 }
 
 // gemm_strided_batched
@@ -9211,7 +9324,37 @@ hipblasStatus_t hipblasSgemmStridedBatched(hipblasHandle_t    handle,
                                            int                ldc,
                                            long long          bsc,
                                            int                batchCount) {
-  return HIPBLAS_STATUS_NOT_SUPPORTED;
+  HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || 
+      C == nullptr || beta == nullptr || m <= 0 || n <= 0 || k <= 0 || 
+      lda <= 0 || ldb <= 0 || ldc <= 0 || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Get alpha and beta values (handle device/host pointer modes)
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  
+  float h_alpha, h_beta;
+  if (is_dev_ptr) {
+    hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
+    hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
+  } else {
+    h_alpha = *alpha;
+    h_beta = *beta;
+  }
+  
+  // Use proper MKLShim strided batch GEMM instead of loop
+  H4I::MKLShim::sGemmBatchedEx(ctxt, convert(transa), convert(transb), m, n, k,
+                               h_alpha, A, H4I::MKLShim::ONEMKL_R_32F, lda, bsa,
+                               B, H4I::MKLShim::ONEMKL_R_32F, ldb, bsb,
+                               h_beta, C, H4I::MKLShim::ONEMKL_R_32F, ldc, bsc, 
+                               batchCount);
+  
+  HIPBLAS_CATCH("SGEMMSTRIDEDBATCHED")
 }
 
 hipblasStatus_t hipblasDgemmStridedBatched(hipblasHandle_t    handle,
@@ -9232,7 +9375,37 @@ hipblasStatus_t hipblasDgemmStridedBatched(hipblasHandle_t    handle,
                                            int                ldc,
                                            long long          bsc,
                                            int                batchCount) {
-  return HIPBLAS_STATUS_NOT_SUPPORTED;
+  HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || 
+      C == nullptr || beta == nullptr || m <= 0 || n <= 0 || k <= 0 || 
+      lda <= 0 || ldb <= 0 || ldc <= 0 || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Get alpha and beta values (handle device/host pointer modes)
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  
+  double h_alpha, h_beta;
+  if (is_dev_ptr) {
+    hipMemcpy(&h_alpha, alpha, sizeof(double), hipMemcpyDefault);
+    hipMemcpy(&h_beta, beta, sizeof(double), hipMemcpyDefault);
+  } else {
+    h_alpha = *alpha;
+    h_beta = *beta;
+  }
+  
+  // Use proper MKLShim strided batch GEMM
+  H4I::MKLShim::dGemmBatchedEx(ctxt, convert(transa), convert(transb), m, n, k,
+                               h_alpha, A, H4I::MKLShim::ONEMKL_R_64F, lda, bsa,
+                               B, H4I::MKLShim::ONEMKL_R_64F, ldb, bsb,
+                               h_beta, C, H4I::MKLShim::ONEMKL_R_64F, ldc, bsc, 
+                               batchCount);
+  
+  HIPBLAS_CATCH("DGEMMSTRIDEDBATCHED")
 }
 
 hipblasStatus_t hipblasCgemmStridedBatched(hipblasHandle_t       handle,
@@ -9253,7 +9426,37 @@ hipblasStatus_t hipblasCgemmStridedBatched(hipblasHandle_t       handle,
                                            int                   ldc,
                                            long long             bsc,
                                            int                   batchCount) {
-  return HIPBLAS_STATUS_NOT_SUPPORTED;
+  HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || 
+      C == nullptr || beta == nullptr || m <= 0 || n <= 0 || k <= 0 || 
+      lda <= 0 || ldb <= 0 || ldc <= 0 || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Get alpha and beta values (handle device/host pointer modes)
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  
+  float _Complex h_alpha, h_beta;
+  if (is_dev_ptr) {
+    hipMemcpy(&h_alpha, alpha, sizeof(float _Complex), hipMemcpyDefault);
+    hipMemcpy(&h_beta, beta, sizeof(float _Complex), hipMemcpyDefault);
+  } else {
+    h_alpha = *((float _Complex*)alpha);
+    h_beta = *((float _Complex*)beta);
+  }
+  
+  // Use proper MKLShim strided batch GEMM
+  H4I::MKLShim::cGemmBatchedEx(ctxt, convert(transa), convert(transb), m, n, k,
+                               h_alpha, A, H4I::MKLShim::ONEMKL_C_32F, lda, bsa,
+                               B, H4I::MKLShim::ONEMKL_C_32F, ldb, bsb,
+                               h_beta, C, H4I::MKLShim::ONEMKL_C_32F, ldc, bsc, 
+                               batchCount);
+  
+  HIPBLAS_CATCH("CGEMMSTRIDEDBATCHED")
 }
 
 hipblasStatus_t hipblasZgemmStridedBatched(hipblasHandle_t             handle,
@@ -9274,7 +9477,37 @@ hipblasStatus_t hipblasZgemmStridedBatched(hipblasHandle_t             handle,
                                            int                         ldc,
                                            long long                   bsc,
                                            int                         batchCount) {
-  return HIPBLAS_STATUS_NOT_SUPPORTED;
+  HIPBLAS_TRY
+  if (handle == nullptr || alpha == nullptr || A == nullptr || B == nullptr || 
+      C == nullptr || beta == nullptr || m <= 0 || n <= 0 || k <= 0 || 
+      lda <= 0 || ldb <= 0 || ldc <= 0 || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Get alpha and beta values (handle device/host pointer modes)
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  
+  double _Complex h_alpha, h_beta;
+  if (is_dev_ptr) {
+    hipMemcpy(&h_alpha, alpha, sizeof(double _Complex), hipMemcpyDefault);
+    hipMemcpy(&h_beta, beta, sizeof(double _Complex), hipMemcpyDefault);
+  } else {
+    h_alpha = *((double _Complex*)alpha);
+    h_beta = *((double _Complex*)beta);
+  }
+  
+  // Use proper MKLShim strided batch GEMM
+  H4I::MKLShim::zGemmBatchedEx(ctxt, convert(transa), convert(transb), m, n, k,
+                               h_alpha, A, H4I::MKLShim::ONEMKL_C_64F, lda, bsa,
+                               B, H4I::MKLShim::ONEMKL_C_64F, ldb, bsb,
+                               h_beta, C, H4I::MKLShim::ONEMKL_C_64F, ldc, bsc, 
+                               batchCount);
+  
+  HIPBLAS_CATCH("ZGEMMSTRIDEDBATCHED")
 }
 
 hipblasStatus_t hipblasSgeam(hipblasHandle_t   handle,
@@ -9427,4 +9660,1015 @@ hipblasStatus_t hipblasZgeam(hipblasHandle_t            handle,
               h_alpha, (const double _Complex*)A, lda, h_beta, (const double _Complex*)B, ldb,
               (double _Complex*)C, ldc);
   HIPBLAS_CATCH("ZGEAM")
+}
+
+// LAPACK Batched Functions
+
+hipblasStatus_t hipblasDgetrfBatched(hipblasHandle_t handle,
+                                    const int n,
+                                    double* const A[],
+                                    const int lda,
+                                    int* ipiv,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || info == nullptr ||
+      n <= 0 || lda < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t lda64 = lda;
+  int64_t group_size = batchCount;
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Dgetrf_batch_ScPadSz(ctxt, group_count, &n64, &n64, &lda64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  double* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(double));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  H4I::MKLShim::Dgetrf_batch(ctxt, &n64, &n64, (double**)A, &lda64, ipiv_ptrs_device, 
+                            group_count, &group_size, scratch_device, scratch_size);
+  
+  // Convert int64_t results back to int and copy to device memory
+  for (int i = 0; i < batchCount; i++) {
+    std::vector<int64_t> ipiv_temp(n);
+    hipMemcpy(ipiv_temp.data(), ipiv_ptrs_host[i], n * sizeof(int64_t), hipMemcpyDeviceToHost);
+    std::vector<int> ipiv_batch(n);
+    for (int j = 0; j < n; j++) {
+      ipiv_batch[j] = static_cast<int>(ipiv_temp[j]);
+    }
+    // Copy the converted results to device memory
+    hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("DGETRFBATCHED")
+}
+
+hipblasStatus_t hipblasDgetriBatched(hipblasHandle_t handle,
+                                    const int n,
+                                    double* const A[],
+                                    const int lda,
+                                    int* ipiv,
+                                    double* const C[],
+                                    const int ldc,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || C == nullptr || info == nullptr ||
+      n <= 0 || lda < n || ldc < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t ldc64 = ldc;
+  int64_t group_size = batchCount;
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Dgetri_batch_ScPadSz(ctxt, group_count, &n64, &ldc64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  double* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(double));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device and copy data
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    std::vector<int64_t> ipiv_temp(n);
+    std::vector<int> ipiv_host(n);
+    // Copy ipiv data from device to host first
+    hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
+    for (int j = 0; j < n; j++) {
+      ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
+    }
+    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  // Copy A to C first (getri works in-place)
+  // First, get the device pointer arrays from device memory
+  std::vector<double*> A_ptrs_host(batchCount);
+  std::vector<double*> C_ptrs_host(batchCount);
+  hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(double*), hipMemcpyDeviceToHost);
+  hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(double*), hipMemcpyDeviceToHost);
+  
+  for (int i = 0; i < batchCount; i++) {
+    hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(double), hipMemcpyDeviceToDevice);
+  }
+  
+  H4I::MKLShim::Dgetri_batch(ctxt, &n64, (double**)C, &ldc64, ipiv_ptrs_device, 
+                            group_count, &group_size, scratch_device, scratch_size);
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  for (int i = 0; i < batchCount; i++) {
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("DGETRIBATCHED")
+}
+
+hipblasStatus_t hipblasDgetrsBatched(hipblasHandle_t handle,
+                                    const hipblasOperation_t trans,
+                                    const int n,
+                                    const int nrhs,
+                                    double* const A[],
+                                    const int lda,
+                                    const int* ipiv,
+                                    double* const B[],
+                                    const int ldb,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || B == nullptr || info == nullptr ||
+      n <= 0 || nrhs <= 0 || lda < n || ldb < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t nrhs64 = nrhs;
+  int64_t lda64 = lda;
+  int64_t ldb64 = ldb;
+  int64_t group_size = batchCount;
+  H4I::MKLShim::onemklTranspose trans_array = convert(trans);
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Dgetrs_batch_ScPadSz(ctxt, group_count, &trans_array, &n64, &nrhs64, 
+                                                         &lda64, &ldb64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  double* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(double));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device and copy data
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    std::vector<int64_t> ipiv_temp(n);
+    std::vector<int> ipiv_host(n);
+    // Copy ipiv data from device to host first
+    hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
+    for (int j = 0; j < n; j++) {
+      ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
+    }
+    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  H4I::MKLShim::Dgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (double**)A, &lda64, 
+                            ipiv_ptrs_device, (double**)B, &ldb64, group_count, &group_size, 
+                            scratch_device, scratch_size);
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  for (int i = 0; i < batchCount; i++) {
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("DGETRSBATCHED")
+}
+
+hipblasStatus_t hipblasZgetrfBatched(hipblasHandle_t handle,
+                                    const int n,
+                                    hipblasDoubleComplex* const A[],
+                                    const int lda,
+                                    int* ipiv,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || info == nullptr ||
+      n <= 0 || lda < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t lda64 = lda;
+  int64_t group_size = batchCount;
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Zgetrf_batch_ScPadSz(ctxt, group_count, &n64, &n64, &lda64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  double _Complex* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(double _Complex));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  H4I::MKLShim::Zgetrf_batch(ctxt, &n64, &n64, (double _Complex**)A, &lda64, ipiv_ptrs_device, 
+                            group_count, &group_size, scratch_device, scratch_size);
+  
+  // Convert int64_t results back to int and copy to device memory
+  for (int i = 0; i < batchCount; i++) {
+    std::vector<int64_t> ipiv_temp(n);
+    hipMemcpy(ipiv_temp.data(), ipiv_ptrs_host[i], n * sizeof(int64_t), hipMemcpyDeviceToHost);
+    std::vector<int> ipiv_batch(n);
+    for (int j = 0; j < n; j++) {
+      ipiv_batch[j] = static_cast<int>(ipiv_temp[j]);
+    }
+    // Copy the converted results to device memory
+    hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("ZGETRFBATCHED")
+}
+
+hipblasStatus_t hipblasZgetriBatched(hipblasHandle_t handle,
+                                    const int n,
+                                    hipblasDoubleComplex* const A[],
+                                    const int lda,
+                                    int* ipiv,
+                                    hipblasDoubleComplex* const C[],
+                                    const int ldc,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || C == nullptr || info == nullptr ||
+      n <= 0 || lda < n || ldc < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t ldc64 = ldc;
+  int64_t group_size = batchCount;
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Zgetri_batch_ScPadSz(ctxt, group_count, &n64, &ldc64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  double _Complex* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(double _Complex));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device and copy data
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    std::vector<int64_t> ipiv_temp(n);
+    std::vector<int> ipiv_host(n);
+    // Copy ipiv data from device to host first
+    hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
+    for (int j = 0; j < n; j++) {
+      ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
+    }
+    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  // Copy A to C first (getri works in-place)
+  // First, get the device pointer arrays from device memory
+  std::vector<hipblasDoubleComplex*> A_ptrs_host(batchCount);
+  std::vector<hipblasDoubleComplex*> C_ptrs_host(batchCount);
+  hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(hipblasDoubleComplex*), hipMemcpyDeviceToHost);
+  hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(hipblasDoubleComplex*), hipMemcpyDeviceToHost);
+  
+  for (int i = 0; i < batchCount; i++) {
+    hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(hipblasDoubleComplex), hipMemcpyDeviceToDevice);
+  }
+  
+  H4I::MKLShim::Zgetri_batch(ctxt, &n64, (double _Complex**)C, &ldc64, ipiv_ptrs_device, 
+                            group_count, &group_size, scratch_device, scratch_size);
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  for (int i = 0; i < batchCount; i++) {
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("ZGETRIBATCHED")
+}
+
+hipblasStatus_t hipblasZgetrsBatched(hipblasHandle_t handle,
+                                    const hipblasOperation_t trans,
+                                    const int n,
+                                    const int nrhs,
+                                    hipblasDoubleComplex* const A[],
+                                    const int lda,
+                                    const int* ipiv,
+                                    hipblasDoubleComplex* const B[],
+                                    const int ldb,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || B == nullptr || info == nullptr ||
+      n <= 0 || nrhs <= 0 || lda < n || ldb < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t nrhs64 = nrhs;
+  int64_t lda64 = lda;
+  int64_t ldb64 = ldb;
+  int64_t group_size = batchCount;
+  H4I::MKLShim::onemklTranspose trans_array = convert(trans);
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Zgetrs_batch_ScPadSz(ctxt, group_count, &trans_array, &n64, &nrhs64, 
+                                                         &lda64, &ldb64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  double _Complex* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(double _Complex));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device and copy data
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    std::vector<int64_t> ipiv_temp(n);
+    std::vector<int> ipiv_host(n);
+    // Copy ipiv data from device to host first
+    hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
+    for (int j = 0; j < n; j++) {
+      ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
+    }
+    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  H4I::MKLShim::Zgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (double _Complex**)A, &lda64, 
+                            ipiv_ptrs_device, (double _Complex**)B, &ldb64, group_count, &group_size, 
+                            scratch_device, scratch_size);
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  for (int i = 0; i < batchCount; i++) {
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("ZGETRSBATCHED")
+}
+
+// Single precision batched LAPACK functions
+
+hipblasStatus_t hipblasSgetrfBatched(hipblasHandle_t handle,
+                                    const int n,
+                                    float* const A[],
+                                    const int lda,
+                                    int* ipiv,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || info == nullptr ||
+      n <= 0 || lda < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t lda64 = lda;
+  int64_t group_size = batchCount;
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Sgetrf_batch_ScPadSz(ctxt, group_count, &n64, &n64, &lda64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  float* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(float));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  H4I::MKLShim::Sgetrf_batch(ctxt, &n64, &n64, (float**)A, &lda64, ipiv_ptrs_device, 
+                            group_count, &group_size, scratch_device, scratch_size);
+  
+  // Convert int64_t results back to int and copy to device memory
+  for (int i = 0; i < batchCount; i++) {
+    std::vector<int64_t> ipiv_temp(n);
+    hipMemcpy(ipiv_temp.data(), ipiv_ptrs_host[i], n * sizeof(int64_t), hipMemcpyDeviceToHost);
+    std::vector<int> ipiv_batch(n);
+    for (int j = 0; j < n; j++) {
+      ipiv_batch[j] = static_cast<int>(ipiv_temp[j]);
+    }
+    // Copy the converted results to device memory
+    hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("SGETRFBATCHED")
+}
+
+hipblasStatus_t hipblasSgetriBatched(hipblasHandle_t handle,
+                                    const int n,
+                                    float* const A[],
+                                    const int lda,
+                                    int* ipiv,
+                                    float* const C[],
+                                    const int ldc,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || C == nullptr || info == nullptr ||
+      n <= 0 || lda < n || ldc < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t ldc64 = ldc;
+  int64_t group_size = batchCount;
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Sgetri_batch_ScPadSz(ctxt, group_count, &n64, &ldc64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  float* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(float));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device and copy data
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    std::vector<int64_t> ipiv_temp(n);
+    std::vector<int> ipiv_host(n);
+    // Copy ipiv data from device to host first
+    hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
+    for (int j = 0; j < n; j++) {
+      ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
+    }
+    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  // Copy A to C first (getri works in-place)
+  // First, get the device pointer arrays from device memory
+  std::vector<float*> A_ptrs_host(batchCount);
+  std::vector<float*> C_ptrs_host(batchCount);
+  hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(float*), hipMemcpyDeviceToHost);
+  hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(float*), hipMemcpyDeviceToHost);
+  
+  for (int i = 0; i < batchCount; i++) {
+    hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(float), hipMemcpyDeviceToDevice);
+  }
+  
+  H4I::MKLShim::Sgetri_batch(ctxt, &n64, (float**)C, &ldc64, ipiv_ptrs_device, 
+                            group_count, &group_size, scratch_device, scratch_size);
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  for (int i = 0; i < batchCount; i++) {
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("SGETRIBATCHED")
+}
+
+hipblasStatus_t hipblasSgetrsBatched(hipblasHandle_t handle,
+                                    const hipblasOperation_t trans,
+                                    const int n,
+                                    const int nrhs,
+                                    float* const A[],
+                                    const int lda,
+                                    const int* ipiv,
+                                    float* const B[],
+                                    const int ldb,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || B == nullptr || info == nullptr ||
+      n <= 0 || nrhs <= 0 || lda < n || ldb < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t nrhs64 = nrhs;
+  int64_t lda64 = lda;
+  int64_t ldb64 = ldb;
+  int64_t group_size = batchCount;
+  H4I::MKLShim::onemklTranspose trans_array = convert(trans);
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Sgetrs_batch_ScPadSz(ctxt, group_count, &trans_array, &n64, &nrhs64, 
+                                                         &lda64, &ldb64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  float* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(float));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device and copy data
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    std::vector<int64_t> ipiv_temp(n);
+    std::vector<int> ipiv_host(n);
+    // Copy ipiv data from device to host first
+    hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
+    for (int j = 0; j < n; j++) {
+      ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
+    }
+    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  H4I::MKLShim::Sgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (float**)A, &lda64, 
+                            ipiv_ptrs_device, (float**)B, &ldb64, group_count, &group_size, 
+                            scratch_device, scratch_size);
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  for (int i = 0; i < batchCount; i++) {
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("SGETRSBATCHED")
+}
+
+// Single precision complex batched LAPACK functions
+
+hipblasStatus_t hipblasCgetrfBatched(hipblasHandle_t handle,
+                                    const int n,
+                                    hipblasComplex* const A[],
+                                    const int lda,
+                                    int* ipiv,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || info == nullptr ||
+      n <= 0 || lda < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t lda64 = lda;
+  int64_t group_size = batchCount;
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Cgetrf_batch_ScPadSz(ctxt, group_count, &n64, &n64, &lda64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  float _Complex* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(float _Complex));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  H4I::MKLShim::Cgetrf_batch(ctxt, &n64, &n64, (float _Complex**)A, &lda64, ipiv_ptrs_device, 
+                            group_count, &group_size, scratch_device, scratch_size);
+  
+  // Convert int64_t results back to int and copy to device memory
+  for (int i = 0; i < batchCount; i++) {
+    std::vector<int64_t> ipiv_temp(n);
+    hipMemcpy(ipiv_temp.data(), ipiv_ptrs_host[i], n * sizeof(int64_t), hipMemcpyDeviceToHost);
+    std::vector<int> ipiv_batch(n);
+    for (int j = 0; j < n; j++) {
+      ipiv_batch[j] = static_cast<int>(ipiv_temp[j]);
+    }
+    // Copy the converted results to device memory
+    hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("CGETRFBATCHED")
+}
+
+hipblasStatus_t hipblasCgetriBatched(hipblasHandle_t handle,
+                                    const int n,
+                                    hipblasComplex* const A[],
+                                    const int lda,
+                                    int* ipiv,
+                                    hipblasComplex* const C[],
+                                    const int ldc,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || C == nullptr || info == nullptr ||
+      n <= 0 || lda < n || ldc < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t ldc64 = ldc;
+  int64_t group_size = batchCount;
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Cgetri_batch_ScPadSz(ctxt, group_count, &n64, &ldc64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  float _Complex* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(float _Complex));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device and copy data
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    std::vector<int64_t> ipiv_temp(n);
+    std::vector<int> ipiv_host(n);
+    // Copy ipiv data from device to host first
+    hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
+    for (int j = 0; j < n; j++) {
+      ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
+    }
+    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  // Copy A to C first (getri works in-place)
+  // First, get the device pointer arrays from device memory
+  std::vector<hipblasComplex*> A_ptrs_host(batchCount);
+  std::vector<hipblasComplex*> C_ptrs_host(batchCount);
+  hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(hipblasComplex*), hipMemcpyDeviceToHost);
+  hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(hipblasComplex*), hipMemcpyDeviceToHost);
+  
+  for (int i = 0; i < batchCount; i++) {
+    hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(hipblasComplex), hipMemcpyDeviceToDevice);
+  }
+  
+  H4I::MKLShim::Cgetri_batch(ctxt, &n64, (float _Complex**)C, &ldc64, ipiv_ptrs_device, 
+                            group_count, &group_size, scratch_device, scratch_size);
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  for (int i = 0; i < batchCount; i++) {
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("CGETRIBATCHED")
+}
+
+hipblasStatus_t hipblasCgetrsBatched(hipblasHandle_t handle,
+                                    const hipblasOperation_t trans,
+                                    const int n,
+                                    const int nrhs,
+                                    hipblasComplex* const A[],
+                                    const int lda,
+                                    const int* ipiv,
+                                    hipblasComplex* const B[],
+                                    const int ldb,
+                                    int* info,
+                                    const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || ipiv == nullptr || B == nullptr || info == nullptr ||
+      n <= 0 || nrhs <= 0 || lda < n || ldb < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Set up group batch parameters for MKLShim
+  int64_t group_count = 1;
+  int64_t n64 = n;
+  int64_t nrhs64 = nrhs;
+  int64_t lda64 = lda;
+  int64_t ldb64 = ldb;
+  int64_t group_size = batchCount;
+  H4I::MKLShim::onemklTranspose trans_array = convert(trans);
+  
+  // Calculate scratchpad size
+  auto scratch_size = H4I::MKLShim::Cgetrs_batch_ScPadSz(ctxt, group_count, &trans_array, &n64, &nrhs64, 
+                                                         &lda64, &ldb64, &group_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+  
+  // Allocate scratchpad memory
+  float _Complex* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(float _Complex));
+  }
+  
+  // Convert int* arrays to int64_t** for MKLShim
+  int64_t** ipiv_ptrs_device;
+  hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
+  
+  // Create array of ipiv pointers on device and copy data
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++) {
+    int64_t* ipiv_i;
+    hipMalloc(&ipiv_i, n * sizeof(int64_t));
+    std::vector<int64_t> ipiv_temp(n);
+    std::vector<int> ipiv_host(n);
+    // Copy ipiv data from device to host first
+    hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
+    for (int j = 0; j < n; j++) {
+      ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
+    }
+    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
+    ipiv_ptrs_host[i] = ipiv_i;
+  }
+  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  
+  H4I::MKLShim::Cgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (float _Complex**)A, &lda64, 
+                            ipiv_ptrs_device, (float _Complex**)B, &ldb64, group_count, &group_size, 
+                            scratch_device, scratch_size);
+  
+  // Set info to 0 (success) for all batches - copy to device
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+  
+  // Cleanup
+  for (int i = 0; i < batchCount; i++) {
+    hipFree(ipiv_ptrs_host[i]);
+  }
+  hipFree(ipiv_ptrs_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+  
+  HIPBLAS_CATCH("CGETRSBATCHED")
+}
+
+// Strided Batched GEMM function
+
+hipblasStatus_t hipblasSgemmStridedBatchedEx(hipblasHandle_t   handle,
+                                            hipblasOperation_t transa,
+                                            hipblasOperation_t transb,
+                                            int                m,
+                                            int                n,
+                                            int                k,
+                                            const void*        alpha,
+                                            const void*        A,
+                                            hipblasDatatype_t  Atype,
+                                            int                lda,
+                                            hipblasStride      stride_A,
+                                            const void*        B,
+                                            hipblasDatatype_t  Btype,
+                                            int                ldb,
+                                            hipblasStride      stride_B,
+                                            const void*        beta,
+                                            void*              C,
+                                            hipblasDatatype_t  Ctype,
+                                            int                ldc,
+                                            hipblasStride      stride_C,
+                                            int                batch_count) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || B == nullptr || C == nullptr ||
+      alpha == nullptr || beta == nullptr || m <= 0 || n <= 0 || k <= 0 ||
+      lda <= 0 || ldb <= 0 || ldc <= 0 || batch_count <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  
+  // Extract alpha value (assuming float)
+  float h_alpha = *static_cast<const float*>(alpha);
+  float h_beta = *static_cast<const float*>(beta);
+  
+  // Use proper MKLShim strided batch GEMM instead of loop
+  H4I::MKLShim::sGemmBatchedEx(ctxt, convert(transa), convert(transb), m, n, k, 
+                              h_alpha, A, convert(Atype), lda, stride_A,
+                              B, convert(Btype), ldb, stride_B, h_beta,
+                              C, convert(Ctype), ldc, stride_C, batch_count);
+  
+  HIPBLAS_CATCH("SGEMMSTRIDEDBATCHEDEX")
 }
