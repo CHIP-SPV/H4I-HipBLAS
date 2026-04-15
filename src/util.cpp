@@ -2,6 +2,8 @@
 // See LICENSE.txt in the root of the source distribution for license info.
 #include <iostream>
 #include <atomic>
+#include <mutex>
+#include <unordered_map>
 #include "hip/hip_runtime.h"	// Necessary for CHIP-SPV implementation.
 #include "hip/hip_interop.h"	// Necessary for CHIP-SPV implementation.
 #include "hipblas.h"
@@ -13,6 +15,15 @@
 // As of now keeping it as global variable, in future
 // it will be part of Context so that different blas context can have it's own pointer mode
 std::atomic<int> POINTER_MODE;
+
+namespace {
+// MKLShim::Context does not carry the user's hipStream_t, but consumers
+// (e.g. libCEED's hip-ref backend) expect hipblasGetStream to return whatever
+// was last passed to hipblasSetStream. Track it in a side-map here rather than
+// adding a field to MKLShim::Context (avoids an ABI break in MKLShim).
+std::mutex g_handle_stream_mu;
+std::unordered_map<hipblasHandle_t, hipStream_t> g_handle_stream;
+}
 
 hipblasStatus_t
 hipblasSetPointerMode(hipblasHandle_t handle, hipblasPointerMode_t mode)
@@ -65,6 +76,10 @@ hipblasDestroy(hipblasHandle_t handle)
 {
     if(handle != nullptr)
     {
+        {
+            std::lock_guard<std::mutex> lk(g_handle_stream_mu);
+            g_handle_stream.erase(handle);
+        }
         H4I::MKLShim::Context* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
         H4I::MKLShim::Destroy(ctxt);
     }
@@ -89,8 +104,27 @@ hipblasSetStream(hipblasHandle_t handle, hipStream_t stream)
     unsigned long handles[nHandles];
     hipGetBackendNativeHandles(reinterpret_cast<uintptr_t>(stream), handles, 0);
     H4I::MKLShim::SetStream(ctxt, handles, nHandles);
+
+    std::lock_guard<std::mutex> lk(g_handle_stream_mu);
+    g_handle_stream[handle] = stream;
   }
   return (handle != nullptr) ? HIPBLAS_STATUS_SUCCESS : HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
+}
+
+hipblasStatus_t
+hipblasGetStream(hipblasHandle_t handle, hipStream_t* streamId)
+{
+    if (handle == nullptr)
+        return HIPBLAS_STATUS_NOT_INITIALIZED;
+    if (streamId == nullptr)
+        return HIPBLAS_STATUS_INVALID_VALUE;
+
+    std::lock_guard<std::mutex> lk(g_handle_stream_mu);
+    auto it = g_handle_stream.find(handle);
+    // If no explicit stream was set, report the default (null) stream — this
+    // matches the behavior of the underlying MKLShim queue in that case.
+    *streamId = (it != g_handle_stream.end()) ? it->second : nullptr;
+    return HIPBLAS_STATUS_SUCCESS;
 }
 
 hipblasStatus_t
