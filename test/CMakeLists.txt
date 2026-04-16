@@ -21,3 +21,8 @@ add_test(NAME h4i-hipblas_context_test COMMAND hipblas_context_test)
 add_test(NAME h4i-hipblas_simple_batched_test COMMAND hipblas_simple_batched_test)
 add_test(NAME h4i-hipblas_batched_correctness_test COMMAND hipblas_batched_correctness_test)
 
+# ILP64 (_64) Level 1 BLAS tests
+add_executable(hipblas_blas1_64_test blas1_64_test.cpp)
+target_link_libraries(hipblas_blas1_64_test PRIVATE hipblas hip::host)
+target_include_directories(hipblas_blas1_64_test PRIVATE ${CMAKE_BINARY_DIR}/include)
+add_test(NAME h4i-hipblas_blas1_64_test COMMAND hipblas_blas1_64_test)
