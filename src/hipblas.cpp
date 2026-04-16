@@ -10672,3 +10672,219 @@ hipblasStatus_t hipblasSgemmStridedBatchedEx(hipblasHandle_t   handle,
   
   HIPBLAS_CATCH("SGEMMSTRIDEDBATCHEDEX")
 }
+
+// ILP64 (int64_t) Level 1 BLAS functions.
+// These call MKLShim directly with native int64_t parameters, matching
+// the full implementation pattern (device pointer checks, etc.).
+
+hipblasStatus_t hipblasSasum_64(hipblasHandle_t handle, int64_t n, const float* x, int64_t incx, float* result) {
+  HIPBLAS_TRY
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  hipError_t hip_status;
+  bool is_result_dev_ptr = isDevicePointer(result);
+  if (incx <= 0) return HIPBLAS_STATUS_INVALID_VALUE;
+  if (n <= 0) {
+    if (is_result_dev_ptr) { hip_status = hipMemset(result, 0, sizeof(float)); }
+    else { *result = 0; }
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+  float* dev_result = result;
+  if (!is_result_dev_ptr) { hip_status = hipMalloc(&dev_result, sizeof(float)); }
+  H4I::MKLShim::sAsum(ctxt, n, x, incx, dev_result);
+  if (!is_result_dev_ptr) {
+    hip_status = hipMemcpy(result, dev_result, sizeof(float), hipMemcpyDefault);
+    hip_status = hipFree(dev_result);
+  }
+  HIPBLAS_CATCH("ASUM_64")
+}
+
+hipblasStatus_t hipblasDasum_64(hipblasHandle_t handle, int64_t n, const double* x, int64_t incx, double* result) {
+  HIPBLAS_TRY
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  hipError_t hip_status;
+  bool is_result_dev_ptr = isDevicePointer(result);
+  if (incx <= 0) return HIPBLAS_STATUS_INVALID_VALUE;
+  if (n <= 0) {
+    if (is_result_dev_ptr) { hip_status = hipMemset(result, 0, sizeof(double)); }
+    else { *result = 0; }
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+  double* dev_result = result;
+  if (!is_result_dev_ptr) { hip_status = hipMalloc(&dev_result, sizeof(double)); }
+  H4I::MKLShim::dAsum(ctxt, n, x, incx, dev_result);
+  if (!is_result_dev_ptr) {
+    hip_status = hipMemcpy(result, dev_result, sizeof(double), hipMemcpyDefault);
+    hip_status = hipFree(dev_result);
+  }
+  HIPBLAS_CATCH("ASUM_64")
+}
+
+hipblasStatus_t hipblasSaxpy_64(hipblasHandle_t handle, int64_t n, const float* alpha,
+                                const float* x, int64_t incx, float* y, int64_t incy) {
+  HIPBLAS_TRY
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  bool is_dev_ptr = isDevicePointer(alpha);
+  float host_alpha = 0;
+  if (is_dev_ptr) { auto s = hipMemcpy(&host_alpha, alpha, sizeof(float), hipMemcpyDefault); }
+  else { host_alpha = *alpha; }
+  H4I::MKLShim::sAxpy(ctxt, n, host_alpha, x, incx, y, incy);
+  HIPBLAS_CATCH("AXPY_64")
+}
+
+hipblasStatus_t hipblasDaxpy_64(hipblasHandle_t handle, int64_t n, const double* alpha,
+                                const double* x, int64_t incx, double* y, int64_t incy) {
+  HIPBLAS_TRY
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  bool is_dev_ptr = isDevicePointer(alpha);
+  double host_alpha = 0;
+  if (is_dev_ptr) { auto s = hipMemcpy(&host_alpha, alpha, sizeof(double), hipMemcpyDefault); }
+  else { host_alpha = *alpha; }
+  H4I::MKLShim::dAxpy(ctxt, n, host_alpha, x, incx, y, incy);
+  HIPBLAS_CATCH("AXPY_64")
+}
+
+hipblasStatus_t hipblasScopy_64(hipblasHandle_t handle, int64_t n, const float* x, int64_t incx,
+                                float* y, int64_t incy) {
+  HIPBLAS_TRY
+  if (handle == nullptr || x == nullptr || y == nullptr || incx <= 0 || incy <= 0 || n <= 0)
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  H4I::MKLShim::sCopy(ctxt, n, x, incx, y, incy);
+  HIPBLAS_CATCH("COPY_64")
+}
+
+hipblasStatus_t hipblasDcopy_64(hipblasHandle_t handle, int64_t n, const double* x, int64_t incx,
+                                double* y, int64_t incy) {
+  HIPBLAS_TRY
+  if (handle == nullptr || x == nullptr || y == nullptr || incx <= 0 || incy <= 0 || n <= 0)
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  H4I::MKLShim::dCopy(ctxt, n, x, incx, y, incy);
+  HIPBLAS_CATCH("COPY_64")
+}
+
+hipblasStatus_t hipblasSscal_64(hipblasHandle_t handle, int64_t n, const float* alpha,
+                                float* x, int64_t incx) {
+  HIPBLAS_TRY
+  if (handle == nullptr || x == nullptr || alpha == nullptr || incx <= 0 || n <= 0)
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  float host_alpha = 1.0;
+  if (is_dev_ptr) { auto s = hipMemcpy(&host_alpha, alpha, sizeof(float), hipMemcpyDefault); }
+  else { host_alpha = *alpha; }
+  H4I::MKLShim::sScal(ctxt, n, host_alpha, x, incx);
+  HIPBLAS_CATCH("SCAL_64")
+}
+
+hipblasStatus_t hipblasDscal_64(hipblasHandle_t handle, int64_t n, const double* alpha,
+                                double* x, int64_t incx) {
+  HIPBLAS_TRY
+  if (handle == nullptr || x == nullptr || alpha == nullptr || incx <= 0 || n <= 0)
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  double host_alpha = 1.0;
+  if (is_dev_ptr) { auto s = hipMemcpy(&host_alpha, alpha, sizeof(double), hipMemcpyDefault); }
+  else { host_alpha = *alpha; }
+  H4I::MKLShim::dScal(ctxt, n, host_alpha, x, incx);
+  HIPBLAS_CATCH("SCAL_64")
+}
+
+hipblasStatus_t hipblasSnrm2_64(hipblasHandle_t handle, int64_t n, const float* x, int64_t incx,
+                                float* result) {
+  HIPBLAS_TRY
+  if (handle == nullptr || x == nullptr || result == nullptr || incx <= 0 || n <= 0)
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  hipError_t status;
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  float* dev_result = result;
+  if (!is_result_dev_ptr) { status = hipMalloc(&dev_result, sizeof(float)); }
+  H4I::MKLShim::sNrm2(ctxt, n, x, incx, dev_result);
+  if (!is_result_dev_ptr) {
+    status = hipMemcpy(result, dev_result, sizeof(float), hipMemcpyDefault);
+    status = hipFree(dev_result);
+  }
+  HIPBLAS_CATCH("NRM2_64")
+}
+
+hipblasStatus_t hipblasDnrm2_64(hipblasHandle_t handle, int64_t n, const double* x, int64_t incx,
+                                double* result) {
+  HIPBLAS_TRY
+  if (handle == nullptr || x == nullptr || result == nullptr || incx <= 0 || n <= 0)
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  hipError_t status;
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  double* dev_result = result;
+  if (!is_result_dev_ptr) { status = hipMalloc(&dev_result, sizeof(double)); }
+  H4I::MKLShim::dNrm2(ctxt, n, x, incx, dev_result);
+  if (!is_result_dev_ptr) {
+    status = hipMemcpy(result, dev_result, sizeof(double), hipMemcpyDefault);
+    status = hipFree(dev_result);
+  }
+  HIPBLAS_CATCH("NRM2_64")
+}
+
+hipblasStatus_t hipblasIsamax_64(hipblasHandle_t handle, int64_t n, const float* x, int64_t incx,
+                                 int64_t* result) {
+  HIPBLAS_TRY
+  hipError_t hip_status;
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  if (x == nullptr) {
+    if (is_result_dev_ptr) { hipMemset(result, 0, sizeof(int64_t)); }
+    else { *result = 0; }
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+  if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0)
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  int64_t *dev_results = nullptr;
+  hip_status = hipMalloc(&dev_results, sizeof(int64_t));
+  H4I::MKLShim::sAmax(ctxt, n, x, incx, dev_results);
+  int64_t results_host_memory = 0;
+  hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  if (!H4I::MKLShim::is_mkl_eq_higher_2023_0_2()) { results_host_memory += 1; }
+  if (is_result_dev_ptr) { hipMemcpy(result, &results_host_memory, sizeof(int64_t), hipMemcpyDefault); }
+  else { *result = results_host_memory; }
+  hip_status = hipFree(dev_results);
+  HIPBLAS_CATCH("AMAX_64")
+}
+
+hipblasStatus_t hipblasIdamax_64(hipblasHandle_t handle, int64_t n, const double* x, int64_t incx,
+                                 int64_t* result) {
+  HIPBLAS_TRY
+  hipError_t hip_status;
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+  if (x == nullptr) {
+    if (is_result_dev_ptr) { hipMemset(result, 0, sizeof(int64_t)); }
+    else { *result = 0; }
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+  if (handle == nullptr || result == nullptr || incx <= 0 || n <= 0)
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  int64_t *dev_results = nullptr;
+  hip_status = hipMalloc(&dev_results, sizeof(int64_t));
+  H4I::MKLShim::dAmax(ctxt, n, x, incx, dev_results);
+  int64_t results_host_memory = 0;
+  hip_status = hipMemcpy(&results_host_memory, dev_results, sizeof(int64_t), hipMemcpyDefault);
+  if (!H4I::MKLShim::is_mkl_eq_higher_2023_0_2()) { results_host_memory += 1; }
+  if (is_result_dev_ptr) { hipMemcpy(result, &results_host_memory, sizeof(int64_t), hipMemcpyDefault); }
+  else { *result = results_host_memory; }
+  hip_status = hipFree(dev_results);
+  HIPBLAS_CATCH("AMAX_64")
+}
