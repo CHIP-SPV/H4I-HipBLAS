@@ -206,3 +206,56 @@ int main() {
     CHECK_HIP(hipMemcpy(dyf, hyf, N * sizeof(float), hipMemcpyHostToDevice));
     float alpha = 3.0f;
     CHECK_BLAS(hipblasSaxpy_64(handle, N, &alpha, dxf, 1, dyf, 1));
+    float hout[N];
+    CHECK_HIP(hipMemcpy(hout, dyf, N * sizeof(float), hipMemcpyDeviceToHost));
+    bool ok = true;
+    for (int64_t i = 0; i < N; i++) {
+      float expected = 3.0f * hxf[i] + hyf[i];
+      if (!near(hout[i], expected, 1e-5)) { ok = false; break; }
+    }
+    if (ok) { pass++; std::cout << "PASS Saxpy_64\n"; }
+    else { fail++; std::cerr << "FAIL Saxpy_64\n"; }
+  }
+
+  // --- Snrm2_64 ---
+  {
+    float result = 0;
+    CHECK_BLAS(hipblasSnrm2_64(handle, N, dxf, 1, &result));
+    float expected = std::sqrt(204.0f);
+    if (near(result, expected, 1e-5)) { pass++; std::cout << "PASS Snrm2_64: " << result << "\n"; }
+    else { fail++; std::cerr << "FAIL Snrm2_64: expected " << expected << ", got " << result << "\n"; }
+  }
+
+  // --- Isamax_64 ---
+  {
+    int64_t result = -1;
+    CHECK_BLAS(hipblasIsamax_64(handle, N, dxf, 1, &result));
+    if (result == 8) { pass++; std::cout << "PASS Isamax_64: " << result << "\n"; }
+    else { fail++; std::cerr << "FAIL Isamax_64: expected 8, got " << result << "\n"; }
+  }
+
+  // --- Sscal_64 ---
+  {
+    CHECK_HIP(hipMemcpy(dyf, hyf, N * sizeof(float), hipMemcpyHostToDevice));
+    float alpha = 2.0f;
+    CHECK_BLAS(hipblasSscal_64(handle, N, &alpha, dyf, 1));
+    float hout[N];
+    CHECK_HIP(hipMemcpy(hout, dyf, N * sizeof(float), hipMemcpyDeviceToHost));
+    bool ok = true;
+    for (int64_t i = 0; i < N; i++) {
+      if (!near(hout[i], 2.0f * hyf[i], 1e-5)) { ok = false; break; }
+    }
+    if (ok) { pass++; std::cout << "PASS Sscal_64\n"; }
+    else { fail++; std::cerr << "FAIL Sscal_64\n"; }
+  }
+
+  // Cleanup
+  CHECK_HIP(hipFree(dxf));
+  CHECK_HIP(hipFree(dyf));
+  CHECK_HIP(hipFree(dx));
+  CHECK_HIP(hipFree(dy));
+  CHECK_BLAS(hipblasDestroy(handle));
+
+  std::cout << "\n" << pass << " passed, " << fail << " failed out of " << (pass + fail) << " tests\n";
+  return fail > 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+}
