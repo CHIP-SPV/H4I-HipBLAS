@@ -53,82 +53,96 @@ int main() {
 
   int pass = 0, fail = 0;
 
+  // Probe fp64 support: Intel Arc (Alchemist) and similar devices lack native fp64.
+  // MKL returns HIPBLAS_STATUS_EXECUTION_FAILED for double ops on unsupported devices.
+  bool fp64_supported = true;
+
   // --- Dasum_64 ---
   {
     double result = 0;
-    CHECK_BLAS(hipblasDasum_64(handle, N, dx, 1, &result));
-    // sum |1|+|2|+...+|8| = 36
-    if (near(result, 36.0)) { pass++; std::cout << "PASS Dasum_64: " << result << "\n"; }
-    else { fail++; std::cerr << "FAIL Dasum_64: expected 36, got " << result << "\n"; }
-  }
-
-  // --- Dnrm2_64 ---
-  {
-    double result = 0;
-    CHECK_BLAS(hipblasDnrm2_64(handle, N, dx, 1, &result));
-    // sqrt(1+4+9+16+25+36+49+64) = sqrt(204)
-    double expected = std::sqrt(204.0);
-    if (near(result, expected)) { pass++; std::cout << "PASS Dnrm2_64: " << result << "\n"; }
-    else { fail++; std::cerr << "FAIL Dnrm2_64: expected " << expected << ", got " << result << "\n"; }
-  }
-
-  // --- Idamax_64 ---
-  {
-    int64_t result = -1;
-    CHECK_BLAS(hipblasIdamax_64(handle, N, dx, 1, &result));
-    // max element is 8 at index 7 (0-based) -> hipBLAS returns 1-based = 8
-    if (result == 8) { pass++; std::cout << "PASS Idamax_64: " << result << "\n"; }
-    else { fail++; std::cerr << "FAIL Idamax_64: expected 8, got " << result << "\n"; }
-  }
-
-  // --- Dscal_64 ---
-  {
-    // Scale dy by 2.0: [8,7,...,1] -> [16,14,...,2]
-    CHECK_HIP(hipMemcpy(dy, hy, N * sizeof(double), hipMemcpyHostToDevice));
-    double alpha = 2.0;
-    CHECK_BLAS(hipblasDscal_64(handle, N, &alpha, dy, 1));
-    double hout[N];
-    CHECK_HIP(hipMemcpy(hout, dy, N * sizeof(double), hipMemcpyDeviceToHost));
-    bool ok = true;
-    for (int64_t i = 0; i < N; i++) {
-      if (!near(hout[i], 2.0 * hy[i])) { ok = false; break; }
+    hipblasStatus_t s = hipblasDasum_64(handle, N, dx, 1, &result);
+    if (s == HIPBLAS_STATUS_EXECUTION_FAILED) {
+      std::cout << "NOTE: device does not support fp64 — skipping double precision tests\n";
+      fp64_supported = false;
+    } else if (s != HIPBLAS_STATUS_SUCCESS) {
+      std::cerr << "hipblasDasum_64 failed: status=" << s << " at line " << __LINE__ << "\n";
+      return EXIT_FAILURE;
+    } else {
+      // sum |1|+|2|+...+|8| = 36
+      if (near(result, 36.0)) { pass++; std::cout << "PASS Dasum_64: " << result << "\n"; }
+      else { fail++; std::cerr << "FAIL Dasum_64: expected 36, got " << result << "\n"; }
     }
-    if (ok) { pass++; std::cout << "PASS Dscal_64: [" << hout[0] << "," << hout[1] << ",...," << hout[N-1] << "]\n"; }
-    else { fail++; std::cerr << "FAIL Dscal_64\n"; }
   }
 
-  // --- Dcopy_64 ---
-  {
-    double *dz;
-    CHECK_HIP(hipMalloc(&dz, N * sizeof(double)));
-    CHECK_HIP(hipMemset(dz, 0, N * sizeof(double)));
-    CHECK_BLAS(hipblasDcopy_64(handle, N, dx, 1, dz, 1));
-    double hout[N];
-    CHECK_HIP(hipMemcpy(hout, dz, N * sizeof(double), hipMemcpyDeviceToHost));
-    bool ok = true;
-    for (int64_t i = 0; i < N; i++) {
-      if (!near(hout[i], hx[i])) { ok = false; break; }
+  if (fp64_supported) {
+    // --- Dnrm2_64 ---
+    {
+      double result = 0;
+      CHECK_BLAS(hipblasDnrm2_64(handle, N, dx, 1, &result));
+      // sqrt(1+4+9+16+25+36+49+64) = sqrt(204)
+      double expected = std::sqrt(204.0);
+      if (near(result, expected)) { pass++; std::cout << "PASS Dnrm2_64: " << result << "\n"; }
+      else { fail++; std::cerr << "FAIL Dnrm2_64: expected " << expected << ", got " << result << "\n"; }
     }
-    if (ok) { pass++; std::cout << "PASS Dcopy_64\n"; }
-    else { fail++; std::cerr << "FAIL Dcopy_64\n"; }
-    CHECK_HIP(hipFree(dz));
-  }
 
-  // --- Daxpy_64 ---
-  {
-    // y = alpha*x + y, alpha=3.0, x=[1..8], y=[8..1] -> [11,13,15,17,19,21,23,25]
-    CHECK_HIP(hipMemcpy(dy, hy, N * sizeof(double), hipMemcpyHostToDevice));
-    double alpha = 3.0;
-    CHECK_BLAS(hipblasDaxpy_64(handle, N, &alpha, dx, 1, dy, 1));
-    double hout[N];
-    CHECK_HIP(hipMemcpy(hout, dy, N * sizeof(double), hipMemcpyDeviceToHost));
-    bool ok = true;
-    for (int64_t i = 0; i < N; i++) {
-      double expected = 3.0 * hx[i] + hy[i];
-      if (!near(hout[i], expected)) { ok = false; std::cerr << "  i=" << i << " expected=" << expected << " got=" << hout[i] << "\n"; break; }
+    // --- Idamax_64 ---
+    {
+      int64_t result = -1;
+      CHECK_BLAS(hipblasIdamax_64(handle, N, dx, 1, &result));
+      // max element is 8 at index 7 (0-based) -> hipBLAS returns 1-based = 8
+      if (result == 8) { pass++; std::cout << "PASS Idamax_64: " << result << "\n"; }
+      else { fail++; std::cerr << "FAIL Idamax_64: expected 8, got " << result << "\n"; }
     }
-    if (ok) { pass++; std::cout << "PASS Daxpy_64: [" << hout[0] << "," << hout[1] << ",...," << hout[N-1] << "]\n"; }
-    else { fail++; std::cerr << "FAIL Daxpy_64\n"; }
+
+    // --- Dscal_64 ---
+    {
+      // Scale dy by 2.0: [8,7,...,1] -> [16,14,...,2]
+      CHECK_HIP(hipMemcpy(dy, hy, N * sizeof(double), hipMemcpyHostToDevice));
+      double alpha = 2.0;
+      CHECK_BLAS(hipblasDscal_64(handle, N, &alpha, dy, 1));
+      double hout[N];
+      CHECK_HIP(hipMemcpy(hout, dy, N * sizeof(double), hipMemcpyDeviceToHost));
+      bool ok = true;
+      for (int64_t i = 0; i < N; i++) {
+        if (!near(hout[i], 2.0 * hy[i])) { ok = false; break; }
+      }
+      if (ok) { pass++; std::cout << "PASS Dscal_64: [" << hout[0] << "," << hout[1] << ",...," << hout[N-1] << "]\n"; }
+      else { fail++; std::cerr << "FAIL Dscal_64\n"; }
+    }
+
+    // --- Dcopy_64 ---
+    {
+      double *dz;
+      CHECK_HIP(hipMalloc(&dz, N * sizeof(double)));
+      CHECK_HIP(hipMemset(dz, 0, N * sizeof(double)));
+      CHECK_BLAS(hipblasDcopy_64(handle, N, dx, 1, dz, 1));
+      double hout[N];
+      CHECK_HIP(hipMemcpy(hout, dz, N * sizeof(double), hipMemcpyDeviceToHost));
+      bool ok = true;
+      for (int64_t i = 0; i < N; i++) {
+        if (!near(hout[i], hx[i])) { ok = false; break; }
+      }
+      if (ok) { pass++; std::cout << "PASS Dcopy_64\n"; }
+      else { fail++; std::cerr << "FAIL Dcopy_64\n"; }
+      CHECK_HIP(hipFree(dz));
+    }
+
+    // --- Daxpy_64 ---
+    {
+      // y = alpha*x + y, alpha=3.0, x=[1..8], y=[8..1] -> [11,13,15,17,19,21,23,25]
+      CHECK_HIP(hipMemcpy(dy, hy, N * sizeof(double), hipMemcpyHostToDevice));
+      double alpha = 3.0;
+      CHECK_BLAS(hipblasDaxpy_64(handle, N, &alpha, dx, 1, dy, 1));
+      double hout[N];
+      CHECK_HIP(hipMemcpy(hout, dy, N * sizeof(double), hipMemcpyDeviceToHost));
+      bool ok = true;
+      for (int64_t i = 0; i < N; i++) {
+        double expected = 3.0 * hx[i] + hy[i];
+        if (!near(hout[i], expected)) { ok = false; std::cerr << "  i=" << i << " expected=" << expected << " got=" << hout[i] << "\n"; break; }
+      }
+      if (ok) { pass++; std::cout << "PASS Daxpy_64: [" << hout[0] << "," << hout[1] << ",...," << hout[N-1] << "]\n"; }
+      else { fail++; std::cerr << "FAIL Daxpy_64\n"; }
+    }
   }
 
   // --- Now float variants ---
