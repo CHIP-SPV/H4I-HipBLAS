@@ -534,35 +534,10 @@ int main() {
     
     bool allPassed = true;
     
-    // Probe fp64 support: Intel Arc (Alchemist) lacks native fp64 and MKL returns
-    // HIPBLAS_STATUS_EXECUTION_FAILED for double ops on these devices.
-    // H4I-HipBLAS catches the SYCL exception internally so it cannot be re-caught here;
-    // use a dedicated probe call to detect the limitation before running the full tests.
-    bool fp64_supported = true;
-    {
-        hipblasHandle_t probe_h = nullptr;
-        if (hipblasCreate(&probe_h) == HIPBLAS_STATUS_SUCCESS) {
-            double dummy = 0;
-            double *d_dummy = nullptr;
-            hipMalloc(&d_dummy, sizeof(double));
-            hipblasStatus_t s = hipblasDasum(probe_h, 1, d_dummy, 1, &dummy);
-            if (s == HIPBLAS_STATUS_EXECUTION_FAILED) {
-                std::cout << "NOTE: device does not support fp64 — skipping D*/C* tests\n";
-                fp64_supported = false;
-            }
-            hipFree(d_dummy);
-            hipblasDestroy(probe_h);
-        }
-    }
-
     // Test all the newly implemented batched functions
-    if (fp64_supported) {
-        allPassed &= testDgetrfBatched();
-        allPassed &= testDgetriBatched();
-        allPassed &= testCgetrfBatched();
-    } else {
-        std::cout << "DgetrfBatched / DgetriBatched / CgetrfBatched SKIPPED (no fp64)\n";
-    }
+    allPassed &= testDgetrfBatched();
+    allPassed &= testDgetriBatched();
+    allPassed &= testCgetrfBatched();
     allPassed &= testSgemmStridedBatched();
     
     std::cout << std::endl;
