@@ -85,6 +85,8 @@ jobs:
           module load oneapi/2025.0.4 llvm/22.0-native level-zero/dgpu
           export CMAKE_PREFIX_PATH="$DEPS/chipstar:$DEPS/mklshim:${CMAKE_PREFIX_PATH:-}"
           export LD_LIBRARY_PATH="$DEPS/chipstar/lib:$DEPS/mklshim/lib:${LD_LIBRARY_PATH:-}"
+          export LIBRARY_PATH="$DEPS/chipstar/lib:$DEPS/mklshim/lib:${LIBRARY_PATH:-}"
+          export CPATH="$DEPS/chipstar/include:$DEPS/mklshim/include:${CPATH:-}"
           rm -rf build
           cmake -S . -B build \
             -DCMAKE_CXX_COMPILER="$DEPS/chipstar/bin/hipcc" \
