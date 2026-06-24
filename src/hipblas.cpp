@@ -9721,12 +9721,12 @@ hipblasStatus_t hipblasDgetrfBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device
+  // One contiguous int64 buffer for all batches' ipiv on the device
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
   std::vector<int64_t*> ipiv_ptrs_host(batchCount);
   for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    ipiv_ptrs_host[i] = ipiv_i;
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   }
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
@@ -9743,8 +9743,8 @@ hipblasStatus_t hipblasDgetrfBatched(hipblasHandle_t handle,
     }
     // Copy the converted results to device memory
     hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
-    hipFree(ipiv_ptrs_host[i]);
   }
+  hipFree(ipiv64_device);
 
   // Set info to 0 (success) for all batches - copy to device
   std::vector<int> info_host(batchCount, 0);
@@ -9797,28 +9797,26 @@ hipblasStatus_t hipblasDgetriBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device and copy data
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    std::vector<int64_t> ipiv_temp(n);
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  {
+    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
     if (ipiv != nullptr) {
-      std::vector<int> ipiv_host(n);
-      // Copy ipiv data from device to host first
-      hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
-      }
+      std::vector<int> ipiv_all((size_t)batchCount * n);
+      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
+      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
+        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
     } else {
       // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(j + 1);
-      }
+      for (int b = 0; b < batchCount; ++b)
+        for (int j = 0; j < n; ++j)
+          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
     }
-    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
-    ipiv_ptrs_host[i] = ipiv_i;
+    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
   }
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++)
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
   // Copy A to C first (getri works in-place)
@@ -9840,9 +9838,7 @@ hipblasStatus_t hipblasDgetriBatched(hipblasHandle_t handle,
   hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
   
   // Cleanup
-  for (int i = 0; i < batchCount; i++) {
-    hipFree(ipiv_ptrs_host[i]);
-  }
+  hipFree(ipiv64_device);
   hipFree(ipiv_ptrs_device);
   if (scratch_device) {
     hipFree(scratch_device);
@@ -9895,28 +9891,26 @@ hipblasStatus_t hipblasDgetrsBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device and copy data
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    std::vector<int64_t> ipiv_temp(n);
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  {
+    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
     if (ipiv != nullptr) {
-      std::vector<int> ipiv_host(n);
-      // Copy ipiv data from device to host first
-      hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
-      }
+      std::vector<int> ipiv_all((size_t)batchCount * n);
+      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
+      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
+        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
     } else {
       // ipiv == nullptr, no-pivoting requested, use an identity pivot
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(j + 1);
-      }
+      for (int b = 0; b < batchCount; ++b)
+        for (int j = 0; j < n; ++j)
+          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
     }
-    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
-    ipiv_ptrs_host[i] = ipiv_i;
+    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
   }
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++)
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
   H4I::MKLShim::Dgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (double**)A, &lda64, 
@@ -9927,9 +9921,7 @@ hipblasStatus_t hipblasDgetrsBatched(hipblasHandle_t handle,
   *info = 0;
 
   // Cleanup
-  for (int i = 0; i < batchCount; i++) {
-    hipFree(ipiv_ptrs_host[i]);
-  }
+  hipFree(ipiv64_device);
   hipFree(ipiv_ptrs_device);
   if (scratch_device) {
     hipFree(scratch_device);
@@ -9995,12 +9987,12 @@ hipblasStatus_t hipblasZgetrfBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device
+  // One contiguous int64 buffer for all batches' ipiv on the device
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
   std::vector<int64_t*> ipiv_ptrs_host(batchCount);
   for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    ipiv_ptrs_host[i] = ipiv_i;
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   }
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
@@ -10017,8 +10009,8 @@ hipblasStatus_t hipblasZgetrfBatched(hipblasHandle_t handle,
     }
     // Copy the converted results to device memory
     hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
-    hipFree(ipiv_ptrs_host[i]);
   }
+  hipFree(ipiv64_device);
 
   // Set info to 0 (success) for all batches - copy to device
   std::vector<int> info_host(batchCount, 0);
@@ -10071,28 +10063,26 @@ hipblasStatus_t hipblasZgetriBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device and copy data
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    std::vector<int64_t> ipiv_temp(n);
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  {
+    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
     if (ipiv != nullptr) {
-      std::vector<int> ipiv_host(n);
-      // Copy ipiv data from device to host first
-      hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
-      }
+      std::vector<int> ipiv_all((size_t)batchCount * n);
+      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
+      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
+        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
     } else {
       // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(j + 1);
-      }
+      for (int b = 0; b < batchCount; ++b)
+        for (int j = 0; j < n; ++j)
+          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
     }
-    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
-    ipiv_ptrs_host[i] = ipiv_i;
+    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
   }
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++)
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
   // Copy A to C first (getri works in-place)
@@ -10114,9 +10104,7 @@ hipblasStatus_t hipblasZgetriBatched(hipblasHandle_t handle,
   hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
   
   // Cleanup
-  for (int i = 0; i < batchCount; i++) {
-    hipFree(ipiv_ptrs_host[i]);
-  }
+  hipFree(ipiv64_device);
   hipFree(ipiv_ptrs_device);
   if (scratch_device) {
     hipFree(scratch_device);
@@ -10169,28 +10157,26 @@ hipblasStatus_t hipblasZgetrsBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device and copy data
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    std::vector<int64_t> ipiv_temp(n);
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  {
+    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
     if (ipiv != nullptr) {
-      std::vector<int> ipiv_host(n);
-      // Copy ipiv data from device to host first
-      hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
-      }
+      std::vector<int> ipiv_all((size_t)batchCount * n);
+      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
+      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
+        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
     } else {
       // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(j + 1);
-      }
+      for (int b = 0; b < batchCount; ++b)
+        for (int j = 0; j < n; ++j)
+          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
     }
-    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
-    ipiv_ptrs_host[i] = ipiv_i;
+    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
   }
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++)
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
   H4I::MKLShim::Zgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (double _Complex**)A, &lda64, 
@@ -10201,9 +10187,7 @@ hipblasStatus_t hipblasZgetrsBatched(hipblasHandle_t handle,
   *info = 0;
 
   // Cleanup
-  for (int i = 0; i < batchCount; i++) {
-    hipFree(ipiv_ptrs_host[i]);
-  }
+  hipFree(ipiv64_device);
   hipFree(ipiv_ptrs_device);
   if (scratch_device) {
     hipFree(scratch_device);
@@ -10271,12 +10255,12 @@ hipblasStatus_t hipblasSgetrfBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device
+  // One contiguous int64 buffer for all batches' ipiv on the device
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
   std::vector<int64_t*> ipiv_ptrs_host(batchCount);
   for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    ipiv_ptrs_host[i] = ipiv_i;
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   }
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
@@ -10293,8 +10277,8 @@ hipblasStatus_t hipblasSgetrfBatched(hipblasHandle_t handle,
     }
     // Copy the converted results to device memory
     hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
-    hipFree(ipiv_ptrs_host[i]);
   }
+  hipFree(ipiv64_device);
 
   // Set info to 0 (success) for all batches - copy to device
   std::vector<int> info_host(batchCount, 0);
@@ -10347,28 +10331,26 @@ hipblasStatus_t hipblasSgetriBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device and copy data
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    std::vector<int64_t> ipiv_temp(n);
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  {
+    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
     if (ipiv != nullptr) {
-      std::vector<int> ipiv_host(n);
-      // Copy ipiv data from device to host first
-      hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
-      }
+      std::vector<int> ipiv_all((size_t)batchCount * n);
+      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
+      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
+        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
     } else {
       // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(j + 1);
-      }
+      for (int b = 0; b < batchCount; ++b)
+        for (int j = 0; j < n; ++j)
+          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
     }
-    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
-    ipiv_ptrs_host[i] = ipiv_i;
+    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
   }
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++)
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
   // Copy A to C first (getri works in-place)
@@ -10390,9 +10372,7 @@ hipblasStatus_t hipblasSgetriBatched(hipblasHandle_t handle,
   hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
   
   // Cleanup
-  for (int i = 0; i < batchCount; i++) {
-    hipFree(ipiv_ptrs_host[i]);
-  }
+  hipFree(ipiv64_device);
   hipFree(ipiv_ptrs_device);
   if (scratch_device) {
     hipFree(scratch_device);
@@ -10445,28 +10425,26 @@ hipblasStatus_t hipblasSgetrsBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device and copy data
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    std::vector<int64_t> ipiv_temp(n);
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  {
+    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
     if (ipiv != nullptr) {
-      std::vector<int> ipiv_host(n);
-      // Copy ipiv data from device to host first
-      hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
-      }
+      std::vector<int> ipiv_all((size_t)batchCount * n);
+      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
+      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
+        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
     } else {
       // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(j + 1);
-      }
+      for (int b = 0; b < batchCount; ++b)
+        for (int j = 0; j < n; ++j)
+          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
     }
-    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
-    ipiv_ptrs_host[i] = ipiv_i;
+    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
   }
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++)
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
   H4I::MKLShim::Sgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (float**)A, &lda64, 
@@ -10476,9 +10454,7 @@ hipblasStatus_t hipblasSgetrsBatched(hipblasHandle_t handle,
   *info = 0;
 
   // Cleanup
-  for (int i = 0; i < batchCount; i++) {
-    hipFree(ipiv_ptrs_host[i]);
-  }
+  hipFree(ipiv64_device);
   hipFree(ipiv_ptrs_device);
   if (scratch_device) {
     hipFree(scratch_device);
@@ -10546,12 +10522,12 @@ hipblasStatus_t hipblasCgetrfBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device
+  // One contiguous int64 buffer for all batches' ipiv on the device
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
   std::vector<int64_t*> ipiv_ptrs_host(batchCount);
   for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    ipiv_ptrs_host[i] = ipiv_i;
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   }
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
@@ -10568,8 +10544,8 @@ hipblasStatus_t hipblasCgetrfBatched(hipblasHandle_t handle,
     }
     // Copy the converted results to device memory
     hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
-    hipFree(ipiv_ptrs_host[i]);
   }
+  hipFree(ipiv64_device);
 
   // Set info to 0 (success) for all batches - copy to device
   std::vector<int> info_host(batchCount, 0);
@@ -10622,28 +10598,26 @@ hipblasStatus_t hipblasCgetriBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device and copy data
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    std::vector<int64_t> ipiv_temp(n);
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  {
+    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
     if (ipiv != nullptr) {
-      std::vector<int> ipiv_host(n);
-      // Copy ipiv data from device to host first
-      hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
-      }
+      std::vector<int> ipiv_all((size_t)batchCount * n);
+      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
+      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
+        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
     } else {
       // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(j + 1);
-      }
+      for (int b = 0; b < batchCount; ++b)
+        for (int j = 0; j < n; ++j)
+          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
     }
-    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
-    ipiv_ptrs_host[i] = ipiv_i;
+    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
   }
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++)
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
   // Copy A to C first (getri works in-place)
@@ -10665,9 +10639,7 @@ hipblasStatus_t hipblasCgetriBatched(hipblasHandle_t handle,
   hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
   
   // Cleanup
-  for (int i = 0; i < batchCount; i++) {
-    hipFree(ipiv_ptrs_host[i]);
-  }
+  hipFree(ipiv64_device);
   hipFree(ipiv_ptrs_device);
   if (scratch_device) {
     hipFree(scratch_device);
@@ -10720,28 +10692,26 @@ hipblasStatus_t hipblasCgetrsBatched(hipblasHandle_t handle,
   int64_t** ipiv_ptrs_device;
   hipMalloc(&ipiv_ptrs_device, batchCount * sizeof(int64_t*));
   
-  // Create array of ipiv pointers on device and copy data
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    int64_t* ipiv_i;
-    hipMalloc(&ipiv_i, n * sizeof(int64_t));
-    std::vector<int64_t> ipiv_temp(n);
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  {
+    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
     if (ipiv != nullptr) {
-      std::vector<int> ipiv_host(n);
-      // Copy ipiv data from device to host first
-      hipMemcpy(ipiv_host.data(), ipiv + i * n, n * sizeof(int), hipMemcpyDeviceToHost);
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(ipiv_host[j]);
-      }
+      std::vector<int> ipiv_all((size_t)batchCount * n);
+      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
+      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
+        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
     } else {
       // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int j = 0; j < n; j++) {
-        ipiv_temp[j] = static_cast<int64_t>(j + 1);
-      }
+      for (int b = 0; b < batchCount; ++b)
+        for (int j = 0; j < n; ++j)
+          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
     }
-    hipMemcpy(ipiv_i, ipiv_temp.data(), n * sizeof(int64_t), hipMemcpyHostToDevice);
-    ipiv_ptrs_host[i] = ipiv_i;
+    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
   }
+  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
+  for (int i = 0; i < batchCount; i++)
+    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
   hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
   
   H4I::MKLShim::Cgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (float _Complex**)A, &lda64, 
@@ -10751,9 +10721,7 @@ hipblasStatus_t hipblasCgetrsBatched(hipblasHandle_t handle,
   *info = 0;
 
   // Cleanup
-  for (int i = 0; i < batchCount; i++) {
-    hipFree(ipiv_ptrs_host[i]);
-  }
+  hipFree(ipiv64_device);
   hipFree(ipiv_ptrs_device);
   if (scratch_device) {
     hipFree(scratch_device);
