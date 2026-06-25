@@ -9790,16 +9790,8 @@ hipblasStatus_t hipblasDgetriBatched(hipblasHandle_t handle,
   // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
   H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
-  // Copy A to C first (getri works in-place)
-  // First, get the device pointer arrays from device memory
-  std::vector<double*> A_ptrs_host(batchCount);
-  std::vector<double*> C_ptrs_host(batchCount);
-  hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(double*), hipMemcpyDeviceToHost);
-  hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(double*), hipMemcpyDeviceToHost);
-
-  for (int i = 0; i < batchCount; i++) {
-    hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(double), hipMemcpyDeviceToDevice);
-  }
+  // Copy A to C first (MKL's getri is in-place while hipBLAS is out-of-place).
+  H4I::MKLShim::Dcopy_batch_a_to_c(ctxt, (const double**)A, (double**)C, n, lda, ldc, batchCount);
   
   H4I::MKLShim::Dgetri_batch(ctxt, &n64, (double**)C, &ldc64, ipiv_ptrs_device,
                             group_count, &group_size, scratch_device, scratch_size);
@@ -10010,16 +10002,8 @@ hipblasStatus_t hipblasZgetriBatched(hipblasHandle_t handle,
   // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
   H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
-  // Copy A to C first (getri works in-place)
-  // First, get the device pointer arrays from device memory
-  std::vector<hipblasDoubleComplex*> A_ptrs_host(batchCount);
-  std::vector<hipblasDoubleComplex*> C_ptrs_host(batchCount);
-  hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(hipblasDoubleComplex*), hipMemcpyDeviceToHost);
-  hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(hipblasDoubleComplex*), hipMemcpyDeviceToHost);
-
-  for (int i = 0; i < batchCount; i++) {
-    hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(hipblasDoubleComplex), hipMemcpyDeviceToDevice);
-  }
+  // Copy A to C first (MKL's getri is in-place while hipBLAS is out-of-place).
+  H4I::MKLShim::Zcopy_batch_a_to_c(ctxt, (const double _Complex**)A, (double _Complex**)C, n, lda, ldc, batchCount);
   
   H4I::MKLShim::Zgetri_batch(ctxt, &n64, (double _Complex**)C, &ldc64, ipiv_ptrs_device, 
                             group_count, &group_size, scratch_device, scratch_size);
@@ -10232,16 +10216,8 @@ hipblasStatus_t hipblasSgetriBatched(hipblasHandle_t handle,
   // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
   H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
-  // Copy A to C first (getri works in-place)
-  // First, get the device pointer arrays from device memory
-  std::vector<float*> A_ptrs_host(batchCount);
-  std::vector<float*> C_ptrs_host(batchCount);
-  hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(float*), hipMemcpyDeviceToHost);
-  hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(float*), hipMemcpyDeviceToHost);
-
-  for (int i = 0; i < batchCount; i++) {
-    hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(float), hipMemcpyDeviceToDevice);
-  }
+  // Copy A to C first (MKL's getri is in-place while hipBLAS is out-of-place).
+  H4I::MKLShim::Scopy_batch_a_to_c(ctxt, (const float**)A, (float**)C, n, lda, ldc, batchCount);
   
   H4I::MKLShim::Sgetri_batch(ctxt, &n64, (float**)C, &ldc64, ipiv_ptrs_device, 
                             group_count, &group_size, scratch_device, scratch_size);
@@ -10453,16 +10429,8 @@ hipblasStatus_t hipblasCgetriBatched(hipblasHandle_t handle,
   // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
   H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
-  // Copy A to C first (getri works in-place)
-  // First, get the device pointer arrays from device memory
-  std::vector<hipblasComplex*> A_ptrs_host(batchCount);
-  std::vector<hipblasComplex*> C_ptrs_host(batchCount);
-  hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(hipblasComplex*), hipMemcpyDeviceToHost);
-  hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(hipblasComplex*), hipMemcpyDeviceToHost);
-
-  for (int i = 0; i < batchCount; i++) {
-    hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(hipblasComplex), hipMemcpyDeviceToDevice);
-  }
+  // Copy A to C first (MKL's getri is in-place while hipBLAS is out-of-place).
+  H4I::MKLShim::Ccopy_batch_a_to_c(ctxt, (const float _Complex**)A, (float _Complex**)C, n, lda, ldc, batchCount);
   
   H4I::MKLShim::Cgetri_batch(ctxt, &n64, (float _Complex**)C, &ldc64, ipiv_ptrs_device, 
                             group_count, &group_size, scratch_device, scratch_size);
