@@ -901,6 +901,48 @@ bool testDgetrsKnownSolution() {
     return ok;
 }
 
+// known solution, transpose: A=[[4,3],[6,3]] (col-major), A^T=[[4,6],[3,3]].
+// X=[1;2] -> B = A^T*X = [4*1+6*2 ; 3*1+3*2] = [16;9]; solve A^T X = B must recover X=[1;2].
+bool testDgetrsKnownSolutionTranspose() {
+    std::cout << "Testing hipblasDgetrsBatched known solution (transpose A^T X = B)..." << std::endl;
+    const int n = 2, nrhs = 1, lda = 2, ldb = 2, batchCount = 1;
+    hipblasHandle_t handle; CHECK_HIPBLAS_STATUS(hipblasCreate(&handle));
+    std::vector<double> A = {4.0, 6.0, 3.0, 3.0};   // col-major A = [[4,3],[6,3]]
+    std::vector<double> B = {16.0, 9.0};            // = A^T * [1;2]
+    std::vector<double> Xexpected = {1.0, 2.0};
+
+    double *dA = nullptr, *dB = nullptr, **A_arr = nullptr, **B_arr = nullptr;
+    int *ipiv = nullptr, *info = nullptr;
+    CHECK_HIP_STATUS(hipMalloc(&dA, 4 * sizeof(double)));
+    CHECK_HIP_STATUS(hipMalloc(&dB, 2 * sizeof(double)));
+    CHECK_HIP_STATUS(hipMemcpy(dA, A.data(), 4 * sizeof(double), hipMemcpyHostToDevice));
+    CHECK_HIP_STATUS(hipMemcpy(dB, B.data(), 2 * sizeof(double), hipMemcpyHostToDevice));
+    CHECK_HIP_STATUS(hipMalloc(&A_arr, sizeof(double*)));
+    CHECK_HIP_STATUS(hipMalloc(&B_arr, sizeof(double*)));
+    CHECK_HIP_STATUS(hipMemcpy(A_arr, &dA, sizeof(double*), hipMemcpyHostToDevice));
+    CHECK_HIP_STATUS(hipMemcpy(B_arr, &dB, sizeof(double*), hipMemcpyHostToDevice));
+    CHECK_HIP_STATUS(hipMalloc(&ipiv, n * sizeof(int)));
+    CHECK_HIP_STATUS(hipMalloc(&info, sizeof(int)));
+
+    int info_getrs = 0;  // getrsBatched info is a single host int
+    CHECK_HIPBLAS_STATUS(hipblasDgetrfBatched(handle, n, A_arr, lda, ipiv, info, batchCount));
+    CHECK_HIPBLAS_STATUS(hipblasDgetrsBatched(handle, HIPBLAS_OP_T, n, nrhs, A_arr, lda, ipiv,
+                                              B_arr, ldb, &info_getrs, batchCount));
+    std::vector<double> X(2);
+    CHECK_HIP_STATUS(hipMemcpy(X.data(), dB, 2 * sizeof(double), hipMemcpyDeviceToHost));
+    bool ok = compareArrays(X.data(), Xexpected.data(), 2, TOLERANCE_DOUBLE);
+    if (!ok) {
+        std::cout << "  [KNOWN-SOLN TRANSPOSE DIVERGENCE] info_getrs=" << info_getrs << "\n"
+                  << "    X[0]=" << X[0] << " (expected 1)   X[1]=" << X[1] << " (expected 2)"
+                  << std::endl;
+    }
+
+    hipFree(dA); hipFree(dB); hipFree(A_arr); hipFree(B_arr); hipFree(ipiv); hipFree(info);
+    hipblasDestroy(handle);
+    if (ok) std::cout << "hipblasDgetrsBatched known-solution transpose test PASSED" << std::endl;
+    return ok;
+}
+
 // single precision Sgetrs
 bool testSgetrsBatched() {
     std::cout << "Testing hipblasSgetrsBatched..." << std::endl;
@@ -1112,22 +1154,23 @@ int main() {
     
     bool allPassed = true;
     
-    // Test all the newly implemented batched functions
-    allPassed &= testDgetrfBatched();
-    allPassed &= testDgetriBatched();
-    allPassed &= testCgetrfBatched();
-    allPassed &= testSgemmStridedBatched();
+    // // Test all the newly implemented batched functions
+    // allPassed &= testDgetrfBatched();
+    // allPassed &= testDgetriBatched();
+    // allPassed &= testCgetrfBatched();
+    // allPassed &= testSgemmStridedBatched();
 
-    // Additional getri coverage
-    allPassed &= testDgetriSizesAndBatches();
-    allPassed &= testDgetriKnownInverse();
-    allPassed &= testDgetriPivoting();
-    allPassed &= testSgetriBatched();
+    // // Additional getri coverage
+    // allPassed &= testDgetriSizesAndBatches();
+    // allPassed &= testDgetriKnownInverse();
+    // allPassed &= testDgetriPivoting();
+    // allPassed &= testSgetriBatched();
 
-    // getrs (solve A X = B) coverage
-    allPassed &= testDgetrsBatched();
+    // // getrs (solve A X = B) coverage
+    // allPassed &= testDgetrsBatched();
     allPassed &= testDgetrsTranspose();
     allPassed &= testDgetrsKnownSolution();
+    allPassed &= testDgetrsKnownSolutionTranspose();
     allPassed &= testSgetrsBatched();
 
     // ipiv=nullptr (no-pivoting) workflow

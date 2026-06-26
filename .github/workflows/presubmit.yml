@@ -96,6 +96,31 @@ jobs:
             -DBUILD_SAMPLES=OFF \
             -DCMAKE_POLICY_VERSION_MINIMUM=3.5
           cmake --build build -j 8
+      - name: Pure-oneMKL batched transpose getrs probe (diagnostic)
+        shell: bash
+        # Self-contained oneMKL reproducer: SYCL queue + getrf_batch/getrs_batch(trans=T)
+        # on a hand-verifiable 2x2 known solution. Diagnostic only
+        run: |
+          set -e
+          if [ -f "$HOME/.local/init/bash" ]; then
+            export MODULESHOME=$HOME/.local
+            source "$MODULESHOME/init/bash"
+          elif [ -f /etc/profile.d/lmod.sh ]; then
+            source /etc/profile.d/lmod.sh
+          else
+            source /etc/profile.d/modules.sh
+          fi
+          module use /space/pvelesko/modulefiles
+          module load oneapi/2025.0.4 llvm/22.0-native level-zero/dgpu
+          # Match the hipBLAS test step: Arc A380 has no native FP64, use IGC emulation.
+          export IGC_EnableDPEmulation=1
+          export OverrideDefaultFP64Settings=1
+          icpx -fsycl -qmkl test/mkl_getrs_transpose_repro.cpp -o "$RUNNER_TEMP/mkl_getrs_repro"
+          for sel in level_zero:gpu opencl:gpu; do
+            echo "=============== ONEAPI_DEVICE_SELECTOR=$sel ==============="
+            ONEAPI_DEVICE_SELECTOR=$sel "$RUNNER_TEMP/mkl_getrs_repro"
+          done
+          true
       - name: Test
         shell: bash
         run: |
