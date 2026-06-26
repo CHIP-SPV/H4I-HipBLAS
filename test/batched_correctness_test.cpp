@@ -813,9 +813,23 @@ static bool runDgetrsCorrectness(hipblasOperation_t trans, int n, int nrhs,
         // R = op(A_orig) * X, compare to original RHS B_orig.
         std::vector<double> R(n * nrhs, 0.0);
         cpu_gemm(tr, false, n, nrhs, n, 1.0, A_orig[b].data(), lda, B_host[b].data(), ldb, 0.0, R.data(), n);
-        for (int j = 0; j < nrhs && ok; ++j)
-            for (int i = 0; i < n && ok; ++i)
-                if (std::abs(R[j * n + i] - B_orig[b][j * ldb + i]) > TOLERANCE_DOUBLE) ok = false;
+        for (int j = 0; j < nrhs; ++j)
+            for (int i = 0; i < n; ++i) {
+                double diff = std::abs(R[j * n + i] - B_orig[b][j * ldb + i]);
+                if (diff > TOLERANCE_DOUBLE) {
+                    std::cout << "  [DIVERGENCE] trans=" << (tr ? "T" : "N")
+                              << " n=" << n << " nrhs=" << nrhs << " batch=" << batchCount
+                              << " info_getrs=" << info_getrs << "\n"
+                              << "    b=" << b << " i=" << i << " j=" << j
+                              << "  X(soln)="    << B_host[b][j * ldb + i]
+                              << "  R=op(A)*X="   << R[j * n + i]
+                              << "  B_expected="  << B_orig[b][j * ldb + i]
+                              << "  |R-B|="       << diff
+                              << "  tol="         << TOLERANCE_DOUBLE
+                              << std::endl;
+                    ok = false;
+                }
+            }
     }
     for (int b = 0; b < batchCount; ++b) { hipFree(A_ptrs[b]); hipFree(B_ptrs[b]); }
     hipFree(A_arr); hipFree(B_arr); hipFree(ipiv); hipFree(info);
@@ -1112,7 +1126,7 @@ int main() {
 
     // getrs (solve A X = B) coverage
     allPassed &= testDgetrsBatched();
-    // allPassed &= testDgetrsTranspose();
+    allPassed &= testDgetrsTranspose();
     allPassed &= testDgetrsKnownSolution();
     allPassed &= testSgetrsBatched();
 
