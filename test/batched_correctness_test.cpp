@@ -943,6 +943,90 @@ bool testDgetrsKnownSolutionTranspose() {
     return ok;
 }
 
+// --- Deterministic known-answer transpose system (NO RNG) -------------------
+// Build A (n x n, col-major), known X (n x nrhs, col-major), and B = A^T * X.
+// Solving A^T X' = B must recover X' == X.
+// MUST stay byte-identical to the copy in test/mkl_getrs_transpose_repro.cpp,
+// so the pure-oneMKL probe and this hipBLAS test consume identical inputs.
+static void buildKnownTransposeSystem(int n, int nrhs,
+        std::vector<double>& A, std::vector<double>& X, std::vector<double>& B) {
+    const int lda = n, ldb = n;
+    A.assign((size_t)n * n, 0.0);
+    X.assign((size_t)n * nrhs, 0.0);
+    B.assign((size_t)n * nrhs, 0.0);
+    // bounded, deterministic entries
+    for (int col = 0; col < n; ++col)
+        for (int row = 0; row < n; ++row)
+            A[col * lda + row] = 0.5 + 0.1 * (double)(((row * 7 + col * 3) % 5));
+    // diagonal dominance -> well-conditioned, non-singular
+    for (int i = 0; i < n; ++i) {
+        double s = 0.0;
+        for (int j = 0; j < n; ++j) if (i != j) s += std::abs(A[j * lda + i]);
+        A[i * lda + i] = s + 1.0;
+    }
+    // known solution
+    for (int j = 0; j < nrhs; ++j)
+        for (int i = 0; i < n; ++i)
+            X[j * ldb + i] = 1.0 + (double)i + 0.25 * (double)j;
+    // B = A^T * X ; (A^T)(i,k) = A(k,i) = A[i*lda + k]
+    for (int j = 0; j < nrhs; ++j)
+        for (int i = 0; i < n; ++i) {
+            double r = 0.0;
+            for (int k = 0; k < n; ++k) r += A[i * lda + k] * X[j * ldb + k];
+            B[j * ldb + i] = r;
+        }
+}
+
+// n=8 known-answer transpose solve. This is the hipBLAS twin of case 2 in
+// test/mkl_getrs_transpose_repro.cpp -- identical inputs via buildKnownTransposeSystem.
+// n=8 is the size where oneMKL 2025.0.x batched transpose getrs misbehaves on the
+// Arc A380 (FP64 emulation) CI stack; n=2 passes there, so this is the real probe.
+bool testDgetrsKnownSolutionTransposeLarge() {
+    std::cout << "Testing hipblasDgetrsBatched known solution (transpose, n=8)..." << std::endl;
+    const int n = 8, nrhs = 3, lda = n, ldb = n, batchCount = 1;
+    hipblasHandle_t handle; CHECK_HIPBLAS_STATUS(hipblasCreate(&handle));
+
+    std::vector<double> A, Xexpected, B;
+    buildKnownTransposeSystem(n, nrhs, A, Xexpected, B);
+
+    double *dA = nullptr, *dB = nullptr, **A_arr = nullptr, **B_arr = nullptr;
+    int *ipiv = nullptr, *info = nullptr;
+    CHECK_HIP_STATUS(hipMalloc(&dA, (size_t)n * n * sizeof(double)));
+    CHECK_HIP_STATUS(hipMalloc(&dB, (size_t)n * nrhs * sizeof(double)));
+    CHECK_HIP_STATUS(hipMemcpy(dA, A.data(), (size_t)n * n * sizeof(double), hipMemcpyHostToDevice));
+    CHECK_HIP_STATUS(hipMemcpy(dB, B.data(), (size_t)n * nrhs * sizeof(double), hipMemcpyHostToDevice));
+    CHECK_HIP_STATUS(hipMalloc(&A_arr, sizeof(double*)));
+    CHECK_HIP_STATUS(hipMalloc(&B_arr, sizeof(double*)));
+    CHECK_HIP_STATUS(hipMemcpy(A_arr, &dA, sizeof(double*), hipMemcpyHostToDevice));
+    CHECK_HIP_STATUS(hipMemcpy(B_arr, &dB, sizeof(double*), hipMemcpyHostToDevice));
+    CHECK_HIP_STATUS(hipMalloc(&ipiv, n * sizeof(int)));
+    CHECK_HIP_STATUS(hipMalloc(&info, sizeof(int)));
+
+    int info_getrs = 0;  // getrsBatched info is a single host int
+    CHECK_HIPBLAS_STATUS(hipblasDgetrfBatched(handle, n, A_arr, lda, ipiv, info, batchCount));
+    CHECK_HIPBLAS_STATUS(hipblasDgetrsBatched(handle, HIPBLAS_OP_T, n, nrhs, A_arr, lda, ipiv,
+                                              B_arr, ldb, &info_getrs, batchCount));
+    std::vector<double> X((size_t)n * nrhs);
+    CHECK_HIP_STATUS(hipMemcpy(X.data(), dB, (size_t)n * nrhs * sizeof(double), hipMemcpyDeviceToHost));
+    bool ok = compareArrays(X.data(), Xexpected.data(), n * nrhs, TOLERANCE_DOUBLE);
+    if (!ok) {
+        std::cout << "  [KNOWN-SOLN TRANSPOSE n=8 DIVERGENCE] info_getrs=" << info_getrs << std::endl;
+        for (int j = 0; j < nrhs; ++j)
+            for (int i = 0; i < n; ++i) {
+                double xv = X[j * ldb + i], xe = Xexpected[j * ldb + i];
+                if (std::abs(xv - xe) > TOLERANCE_DOUBLE)
+                    std::cout << "    i=" << i << " j=" << j
+                              << "  X=" << xv << "  expected=" << xe
+                              << "  |diff|=" << std::abs(xv - xe) << std::endl;
+            }
+    }
+
+    hipFree(dA); hipFree(dB); hipFree(A_arr); hipFree(B_arr); hipFree(ipiv); hipFree(info);
+    hipblasDestroy(handle);
+    if (ok) std::cout << "hipblasDgetrsBatched known-solution transpose (n=8) test PASSED" << std::endl;
+    return ok;
+}
+
 // single precision Sgetrs
 bool testSgetrsBatched() {
     std::cout << "Testing hipblasSgetrsBatched..." << std::endl;
@@ -1171,6 +1255,7 @@ int main() {
     allPassed &= testDgetrsTranspose();
     allPassed &= testDgetrsKnownSolution();
     allPassed &= testDgetrsKnownSolutionTranspose();
+    allPassed &= testDgetrsKnownSolutionTransposeLarge();
     allPassed &= testSgetrsBatched();
 
     // ipiv=nullptr (no-pivoting) workflow
