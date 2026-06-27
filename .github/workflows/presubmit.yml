@@ -101,7 +101,7 @@ jobs:
         # Self-contained oneMKL reproducer: SYCL queue + getrf_batch/getrs_batch(trans=T)
         # on a hand-verifiable 2x2 known solution. Diagnostic only
         run: |
-          set -e
+          set +e
           if [ -f "$HOME/.local/init/bash" ]; then
             export MODULESHOME=$HOME/.local
             source "$MODULESHOME/init/bash"
@@ -129,7 +129,7 @@ jobs:
         # the n=2 disagreement (SYCL-default queue NaN'd, hipBLAS path passed) comes
         # from queue construction rather than oneMKL. Diagnostic only.
         run: |
-          set -e
+          set +e
           if [ -f "$HOME/.local/init/bash" ]; then
             export MODULESHOME=$HOME/.local
             source "$MODULESHOME/init/bash"
