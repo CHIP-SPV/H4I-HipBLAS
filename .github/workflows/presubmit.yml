@@ -145,6 +145,37 @@ jobs:
           icpx -fsycl -qmkl -lze_loader test/mkl_getrs_lz_2x2.cpp -o "$RUNNER_TEMP/mkl_getrs_lz_2x2"
           "$RUNNER_TEMP/mkl_getrs_lz_2x2"
           true
+      - name: Same 2x2 through SYCL vs HIP (diagnostic)
+        shell: bash
+        # The SAME 2x2 transpose system (A^T X = B, expect [1;2]) solved two ways:
+        #   two_sycl: pure SYCL + oneMKL (default queue)
+        #   two_hip : HIP -> hipBLAS -> MKLShim -> oneMKL
+        # Both print the full matrix and full solution. If they disagree on identical
+        # inputs, the difference is in the path to oneMKL, not the MKL math. Diagnostic only.
+        run: |
+          set -e
+          if [ -f "$HOME/.local/init/bash" ]; then
+            export MODULESHOME=$HOME/.local
+            source "$MODULESHOME/init/bash"
+          elif [ -f /etc/profile.d/lmod.sh ]; then
+            source /etc/profile.d/lmod.sh
+          else
+            source /etc/profile.d/modules.sh
+          fi
+          module use /space/pvelesko/modulefiles
+          module load oneapi/2025.0.4 llvm/22.0-native level-zero/dgpu
+          export CMAKE_PREFIX_PATH="$DEPS/chipstar:$DEPS/mklshim:${CMAKE_PREFIX_PATH:-}"
+          export LD_LIBRARY_PATH="$DEPS/chipstar/lib:$DEPS/mklshim/lib:$PWD/build/src:${LD_LIBRARY_PATH:-}"
+          export IGC_EnableDPEmulation=1
+          export OverrideDefaultFP64Settings=1
+          echo "=============== two_sycl (pure SYCL + oneMKL) ==============="
+          icpx -fsycl -qmkl test/two_sycl.cpp -o "$RUNNER_TEMP/two_sycl"
+          "$RUNNER_TEMP/two_sycl"
+          echo "=============== two_hip (HIP -> hipBLAS -> MKLShim -> oneMKL) ==============="
+          "$DEPS/chipstar/bin/hipcc" test/two_hip.cpp -I"$PWD/build/include" \
+            -L"$PWD/build/src" -lhipblas -Wl,-rpath,"$PWD/build/src" -o "$RUNNER_TEMP/two_hip"
+          CHIP_BE=level0 "$RUNNER_TEMP/two_hip"
+          true
       - name: Test
         shell: bash
         run: |
