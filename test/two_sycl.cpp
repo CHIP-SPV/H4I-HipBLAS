@@ -59,13 +59,19 @@ int main() {
 
     int64_t ss = oneapi::mkl::lapack::getrs_batch_scratchpad_size<double>(q, tr_a, n_a, nr_a, la_a, lb_a, gc, gz);
     double* ssc = sycl::malloc_device<double>(ss>0?ss:1, q);
-    oneapi::mkl::lapack::getrs_batch(q, tr_a, n_a, nr_a,
-        const_cast<const double* const*>(Ap), la_a,
-        const_cast<const int64_t* const*>(Ipp), Bp, lb_a, gc, gz, ssc, ss, {});
-    q.wait();
 
-    double X[2] = {0,0};
-    q.memcpy(X, dB, sizeof X).wait();
-    std::printf("solution X = [ %.10g ; %.10g ]   expected [ 1 ; 2 ]\n", X[0], X[1]);
+    // Run getrs repeatedly to check for a warm-up / cold-first-call effect.
+    // B is overwritten by the solution each call, so reload it before each solve.
+    for (int pass = 0; pass < 3; ++pass) {
+        q.memcpy(dB, B, sizeof B).wait();
+        oneapi::mkl::lapack::getrs_batch(q, tr_a, n_a, nr_a,
+            const_cast<const double* const*>(Ap), la_a,
+            const_cast<const int64_t* const*>(Ipp), Bp, lb_a, gc, gz, ssc, ss, {});
+        q.wait();
+        double X[2] = {0, 0};
+        q.memcpy(X, dB, sizeof X).wait();
+        std::printf("getrs pass %d: X = [ %.10g ; %.10g ]   expected [ 1 ; 2 ]\n",
+                    pass, X[0], X[1]);
+    }
     return 0;
 }

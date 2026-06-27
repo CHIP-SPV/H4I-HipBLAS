@@ -46,12 +46,17 @@ int main() {
                 luA[0], luA[1], luA[2], luA[3]);
     std::printf("after getrf: ipiv = [ %d ; %d ]  (1-based)\n", piv[0], piv[1]);
 
-    hipblasDgetrsBatched(handle, HIPBLAS_OP_T, n, nrhs, A_arr, lda, ipiv,
-                         B_arr, ldb, &info_getrs, batchCount);
-
-    double X[2] = {0, 0};
-    hipMemcpy(X, dB, 2 * sizeof(double), hipMemcpyDeviceToHost);
-    std::printf("solution X = [ %.10g ; %.10g ]   expected [ 1 ; 2 ]\n", X[0], X[1]);
+    // Run getrs repeatedly to check for a warm-up / cold-first-call effect.
+    // B is overwritten by the solution each call, so reload it before each solve.
+    for (int pass = 0; pass < 3; ++pass) {
+        hipMemcpy(dB, B, 2 * sizeof(double), hipMemcpyHostToDevice);
+        hipblasDgetrsBatched(handle, HIPBLAS_OP_T, n, nrhs, A_arr, lda, ipiv,
+                             B_arr, ldb, &info_getrs, batchCount);
+        double X[2] = {0, 0};
+        hipMemcpy(X, dB, 2 * sizeof(double), hipMemcpyDeviceToHost);
+        std::printf("getrs pass %d: X = [ %.10g ; %.10g ]   expected [ 1 ; 2 ]\n",
+                    pass, X[0], X[1]);
+    }
 
     hipFree(dA);
     hipFree(dB);
