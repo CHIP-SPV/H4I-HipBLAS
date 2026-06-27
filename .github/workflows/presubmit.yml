@@ -121,6 +121,30 @@ jobs:
             ONEAPI_DEVICE_SELECTOR=$sel "$RUNNER_TEMP/mkl_getrs_repro"
           done
           true
+      - name: Pure-oneMKL probe with native Level Zero queue (diagnostic)
+        shell: bash
+        # Same 2x2 transpose known solution, but the SYCL queue is wrapped from a
+        # raw Level Zero command queue (out-of-order), mirroring how H4I-MKLShim
+        # Context.cpp builds ctxt->queue from chipStar's LZ queue. Isolates whether
+        # the n=2 disagreement (SYCL-default queue NaN'd, hipBLAS path passed) comes
+        # from queue construction rather than oneMKL. Diagnostic only.
+        run: |
+          set -e
+          if [ -f "$HOME/.local/init/bash" ]; then
+            export MODULESHOME=$HOME/.local
+            source "$MODULESHOME/init/bash"
+          elif [ -f /etc/profile.d/lmod.sh ]; then
+            source /etc/profile.d/lmod.sh
+          else
+            source /etc/profile.d/modules.sh
+          fi
+          module use /space/pvelesko/modulefiles
+          module load oneapi/2025.0.4 llvm/22.0-native level-zero/dgpu
+          export IGC_EnableDPEmulation=1
+          export OverrideDefaultFP64Settings=1
+          icpx -fsycl -qmkl -lze_loader test/mkl_getrs_lz_2x2.cpp -o "$RUNNER_TEMP/mkl_getrs_lz_2x2"
+          "$RUNNER_TEMP/mkl_getrs_lz_2x2"
+          true
       - name: Test
         shell: bash
         run: |
