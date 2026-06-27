@@ -20,8 +20,12 @@
 int main() {
     // --- create a native Level Zero command queue ---
     zeInit(0);
-    uint32_t nd = 1; ze_driver_handle_t drv;  zeDriverGet(&nd, &drv);
-    uint32_t ng = 1; ze_device_handle_t dev;  zeDeviceGet(drv, &ng, &dev);
+    uint32_t nd = 1;
+    ze_driver_handle_t drv;
+    zeDriverGet(&nd, &drv);
+    uint32_t ng = 1;
+    ze_device_handle_t dev;
+    zeDeviceGet(drv, &ng, &dev);
     ze_context_handle_t zctx;
     ze_context_desc_t cd = {ZE_STRUCTURE_TYPE_CONTEXT_DESC, nullptr, 0};
     zeContextCreate(drv, &cd, &zctx);
@@ -33,8 +37,12 @@ int main() {
     for (auto& g : grps) g.stype = ZE_STRUCTURE_TYPE_COMMAND_QUEUE_GROUP_PROPERTIES;
     zeDeviceGetCommandQueueGroupProperties(dev, &grpCount, grps.data());
     uint32_t computeOrdinal = 0;
-    for (uint32_t i = 0; i < grpCount; ++i)
-        if (grps[i].flags & ZE_COMMAND_QUEUE_GROUP_PROPERTY_FLAG_COMPUTE) { computeOrdinal = i; break; }
+    for (uint32_t i = 0; i < grpCount; ++i) {
+        if (grps[i].flags & ZE_COMMAND_QUEUE_GROUP_PROPERTY_FLAG_COMPUTE) {
+            computeOrdinal = i;
+            break;
+        }
+    }
 
     // Command queue descriptor matching chipStar's Level0 backend:
     // compute ordinal, IN_ORDER flag, ASYNCHRONOUS mode.
@@ -51,15 +59,20 @@ int main() {
     auto plat = sycl::detail::make_platform((ur_native_handle_t)drv,
                                             sycl::backend::ext_oneapi_level_zero);
     sycl::device sdev;
-    for (auto& d : plat.get_devices())
-        if (sycl::get_native<sycl::backend::ext_oneapi_level_zero>(d) == dev) { sdev = d; break; }
+    for (auto& d : plat.get_devices()) {
+        if (sycl::get_native<sycl::backend::ext_oneapi_level_zero>(d) == dev) {
+            sdev = d;
+            break;
+        }
+    }
     auto sctx = sycl::detail::make_context((ur_native_handle_t)zctx, {},
                  sycl::backend::ext_oneapi_level_zero, true, {sdev});
     sycl::queue q = sycl::detail::make_queue((ur_native_handle_t)zq, false, sctx, &sdev, true,
                  {}, {}, sycl::backend::ext_oneapi_level_zero);
 
     std::printf("device: %s\n", q.get_device().get_info<sycl::info::device::name>().c_str());
-    MKLVersion v; mkl_get_version(&v);
+    MKLVersion v;
+    mkl_get_version(&v);
     std::printf("oneMKL %d.%d update %d (build %s)\n",
                 v.MajorVersion, v.MinorVersion, v.UpdateVersion, v.Build);
 
@@ -72,13 +85,20 @@ int main() {
     double*  dA = sycl::malloc_device<double>(4, q);
     double*  dB = sycl::malloc_device<double>(2, q);
     int64_t* dIp = sycl::malloc_device<int64_t>(n, q);
-    q.memcpy(dA, A, sizeof A); q.memcpy(dB, B, sizeof B); q.wait();
+    q.memcpy(dA, A, sizeof A);
+    q.memcpy(dB, B, sizeof B);
+    q.wait();
 
     double**  Ap  = sycl::malloc_device<double*>(1, q);
     double**  Bp  = sycl::malloc_device<double*>(1, q);
     int64_t** Ipp = sycl::malloc_device<int64_t*>(1, q);
-    double* hA[1]={dA}; double* hB[1]={dB}; int64_t* hI[1]={dIp};
-    q.memcpy(Ap, hA, sizeof hA); q.memcpy(Bp, hB, sizeof hB); q.memcpy(Ipp, hI, sizeof hI); q.wait();
+    double* hA[1]={dA};
+    double* hB[1]={dB};
+    int64_t* hI[1]={dIp};
+    q.memcpy(Ap, hA, sizeof hA);
+    q.memcpy(Bp, hB, sizeof hB);
+    q.memcpy(Ipp, hI, sizeof hI);
+    q.wait();
 
     int64_t m_a[1]={n}, n_a[1]={n}, nr_a[1]={nrhs}, la_a[1]={lda}, lb_a[1]={ldb}, gz[1]={gs};
     oneapi::mkl::transpose tr_a[1]={trans};

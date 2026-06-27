@@ -172,9 +172,9 @@ jobs:
           icpx -fsycl -qmkl test/two_sycl.cpp -o "$RUNNER_TEMP/two_sycl"
           "$RUNNER_TEMP/two_sycl"
           echo "=============== two_hip (HIP -> hipBLAS -> MKLShim -> oneMKL) ==============="
-          "$DEPS/chipstar/bin/hipcc" test/two_hip.cpp -I"$PWD/build/include" \
-            -L"$PWD/build/src" -lhipblas -Wl,-rpath,"$PWD/build/src" -o "$RUNNER_TEMP/two_hip"
-          CHIP_BE=level0 "$RUNNER_TEMP/two_hip"
+          # Built by CMake (target two_hip) so it inherits hipblas' generated headers.
+          cmake --build build --target two_hip -j 8
+          CHIP_BE=level0 ./build/test/two_hip
           true
       - name: Test
         shell: bash

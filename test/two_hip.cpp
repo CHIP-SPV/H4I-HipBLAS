@@ -36,6 +36,16 @@ int main() {
 
     int info_getrs = 0;  // getrsBatched info is a single host int
     hipblasDgetrfBatched(handle, n, A_arr, lda, ipiv, info, batchCount);
+
+    // --- intermediate: LU factors and pivots after getrf, before getrs ---
+    double luA[4] = {0, 0, 0, 0};
+    int piv[2] = {0, 0};
+    hipMemcpy(luA, dA, 4 * sizeof(double), hipMemcpyDeviceToHost);
+    hipMemcpy(piv, ipiv, 2 * sizeof(int), hipMemcpyDeviceToHost);
+    std::printf("after getrf: LU(A) col-major = {%.6g, %.6g, %.6g, %.6g}\n",
+                luA[0], luA[1], luA[2], luA[3]);
+    std::printf("after getrf: ipiv = [ %d ; %d ]  (1-based)\n", piv[0], piv[1]);
+
     hipblasDgetrsBatched(handle, HIPBLAS_OP_T, n, nrhs, A_arr, lda, ipiv,
                          B_arr, ldb, &info_getrs, batchCount);
 
@@ -43,7 +53,12 @@ int main() {
     hipMemcpy(X, dB, 2 * sizeof(double), hipMemcpyDeviceToHost);
     std::printf("solution X = [ %.10g ; %.10g ]   expected [ 1 ; 2 ]\n", X[0], X[1]);
 
-    hipFree(dA); hipFree(dB); hipFree(A_arr); hipFree(B_arr); hipFree(ipiv); hipFree(info);
+    hipFree(dA);
+    hipFree(dB);
+    hipFree(A_arr);
+    hipFree(B_arr);
+    hipFree(ipiv);
+    hipFree(info);
     hipblasDestroy(handle);
     return 0;
 }

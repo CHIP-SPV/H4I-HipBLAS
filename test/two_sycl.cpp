@@ -25,13 +25,20 @@ int main() {
     double*  dA  = sycl::malloc_device<double>(4, q);
     double*  dB  = sycl::malloc_device<double>(2, q);
     int64_t* dIp = sycl::malloc_device<int64_t>(n, q);
-    q.memcpy(dA, A, sizeof A); q.memcpy(dB, B, sizeof B); q.wait();
+    q.memcpy(dA, A, sizeof A);
+    q.memcpy(dB, B, sizeof B);
+    q.wait();
 
     double**  Ap  = sycl::malloc_device<double*>(1, q);
     double**  Bp  = sycl::malloc_device<double*>(1, q);
     int64_t** Ipp = sycl::malloc_device<int64_t*>(1, q);
-    double* hA[1]={dA}; double* hB[1]={dB}; int64_t* hI[1]={dIp};
-    q.memcpy(Ap, hA, sizeof hA); q.memcpy(Bp, hB, sizeof hB); q.memcpy(Ipp, hI, sizeof hI); q.wait();
+    double* hA[1]={dA};
+    double* hB[1]={dB};
+    int64_t* hI[1]={dIp};
+    q.memcpy(Ap, hA, sizeof hA);
+    q.memcpy(Bp, hB, sizeof hB);
+    q.memcpy(Ipp, hI, sizeof hI);
+    q.wait();
 
     int64_t m_a[1]={n}, n_a[1]={n}, nr_a[1]={nrhs}, la_a[1]={lda}, lb_a[1]={ldb}, gz[1]={gs};
     oneapi::mkl::transpose tr_a[1]={trans};
@@ -40,6 +47,15 @@ int main() {
     double* fsc = sycl::malloc_device<double>(fs>0?fs:1, q);
     oneapi::mkl::lapack::getrf_batch(q, m_a, n_a, Ap, la_a, Ipp, gc, gz, fsc, fs, {});
     q.wait();
+
+    // --- intermediate: LU factors and pivots after getrf, before getrs ---
+    double luA[4] = {0, 0, 0, 0};
+    int64_t piv[2] = {0, 0};
+    q.memcpy(luA, dA, sizeof luA).wait();
+    q.memcpy(piv, dIp, sizeof piv).wait();
+    std::printf("after getrf: LU(A) col-major = {%.6g, %.6g, %.6g, %.6g}\n",
+                luA[0], luA[1], luA[2], luA[3]);
+    std::printf("after getrf: ipiv = [ %ld ; %ld ]  (1-based)\n", (long)piv[0], (long)piv[1]);
 
     int64_t ss = oneapi::mkl::lapack::getrs_batch_scratchpad_size<double>(q, tr_a, n_a, nr_a, la_a, lb_a, gc, gz);
     double* ssc = sycl::malloc_device<double>(ss>0?ss:1, q);
