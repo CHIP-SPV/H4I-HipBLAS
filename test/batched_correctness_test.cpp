@@ -25,7 +25,7 @@ const float  TOLERANCE_FLOAT  = 1e-4f;
 template<typename T>
 bool compareArrays(const T* a, const T* b, int size, T tolerance) {
     for (int i = 0; i < size; i++) {
-        if(std::isnan(a[i]) || std::isnan(b[i]) {
+        if(std::isnan(a[i]) || std::isnan(b[i])) {
             std::cerr << "Array element at index " << i << ": " << a[i] << " or " << b[i] 
                       << " is nan. This should never happen." << std::endl;
             return false;
