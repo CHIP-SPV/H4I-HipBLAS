@@ -9724,26 +9724,14 @@ hipblasStatus_t hipblasDgetrfBatched(hipblasHandle_t handle,
   // One contiguous int64 buffer for all batches' ipiv on the device
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  }
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Build the pivot pointer array on the device
+  H4I::MKLShim::make_ipiv_int64_ptr_list(ctxt, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   H4I::MKLShim::Dgetrf_batch(ctxt, &n64, &n64, (double**)A, &lda64, ipiv_ptrs_device, 
                             group_count, &group_size, scratch_device, scratch_size);
   
-  // Convert int64_t results back to int and copy to device memory
-  for (int i = 0; i < batchCount; i++) {
-    std::vector<int64_t> ipiv_temp(n);
-    hipMemcpy(ipiv_temp.data(), ipiv_ptrs_host[i], n * sizeof(int64_t), hipMemcpyDeviceToHost);
-    std::vector<int> ipiv_batch(n);
-    for (int j = 0; j < n; j++) {
-      ipiv_batch[j] = static_cast<int>(ipiv_temp[j]);
-    }
-    // Copy the converted results to device memory
-    hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
-  }
+  // Convert the int64 pivots back to int pivots on the device
+  H4I::MKLShim::convert_ipiv_to_int32(ctxt, ipiv64_device, ipiv, (int64_t)batchCount * n);
   hipFree(ipiv64_device);
 
   // Set info to 0 (success) for all batches - copy to device
@@ -9799,25 +9787,8 @@ hipblasStatus_t hipblasDgetriBatched(hipblasHandle_t handle,
   
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  {
-    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
-    if (ipiv != nullptr) {
-      std::vector<int> ipiv_all((size_t)batchCount * n);
-      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
-      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
-        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
-    } else {
-      // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int b = 0; b < batchCount; ++b)
-        for (int j = 0; j < n; ++j)
-          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
-    }
-    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
-  }
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++)
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
+  H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   // Copy A to C first (getri works in-place)
   // First, get the device pointer arrays from device memory
@@ -9825,7 +9796,7 @@ hipblasStatus_t hipblasDgetriBatched(hipblasHandle_t handle,
   std::vector<double*> C_ptrs_host(batchCount);
   hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(double*), hipMemcpyDeviceToHost);
   hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(double*), hipMemcpyDeviceToHost);
-  
+
   for (int i = 0; i < batchCount; i++) {
     hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(double), hipMemcpyDeviceToDevice);
   }
@@ -9893,25 +9864,8 @@ hipblasStatus_t hipblasDgetrsBatched(hipblasHandle_t handle,
   
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  {
-    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
-    if (ipiv != nullptr) {
-      std::vector<int> ipiv_all((size_t)batchCount * n);
-      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
-      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
-        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
-    } else {
-      // ipiv == nullptr, no-pivoting requested, use an identity pivot
-      for (int b = 0; b < batchCount; ++b)
-        for (int j = 0; j < n; ++j)
-          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
-    }
-    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
-  }
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++)
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
+  H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   H4I::MKLShim::Dgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (double**)A, &lda64, 
                             ipiv_ptrs_device, (double**)B, &ldb64, group_count, &group_size, 
@@ -9990,26 +9944,14 @@ hipblasStatus_t hipblasZgetrfBatched(hipblasHandle_t handle,
   // One contiguous int64 buffer for all batches' ipiv on the device
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  }
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Build the pivot pointer array on the device
+  H4I::MKLShim::make_ipiv_int64_ptr_list(ctxt, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   H4I::MKLShim::Zgetrf_batch(ctxt, &n64, &n64, (double _Complex**)A, &lda64, ipiv_ptrs_device, 
                             group_count, &group_size, scratch_device, scratch_size);
   
-  // Convert int64_t results back to int and copy to device memory
-  for (int i = 0; i < batchCount; i++) {
-    std::vector<int64_t> ipiv_temp(n);
-    hipMemcpy(ipiv_temp.data(), ipiv_ptrs_host[i], n * sizeof(int64_t), hipMemcpyDeviceToHost);
-    std::vector<int> ipiv_batch(n);
-    for (int j = 0; j < n; j++) {
-      ipiv_batch[j] = static_cast<int>(ipiv_temp[j]);
-    }
-    // Copy the converted results to device memory
-    hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
-  }
+  // Convert the int64 pivots back to int pivots on the device
+  H4I::MKLShim::convert_ipiv_to_int32(ctxt, ipiv64_device, ipiv, (int64_t)batchCount * n);
   hipFree(ipiv64_device);
 
   // Set info to 0 (success) for all batches - copy to device
@@ -10065,25 +10007,8 @@ hipblasStatus_t hipblasZgetriBatched(hipblasHandle_t handle,
   
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  {
-    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
-    if (ipiv != nullptr) {
-      std::vector<int> ipiv_all((size_t)batchCount * n);
-      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
-      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
-        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
-    } else {
-      // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int b = 0; b < batchCount; ++b)
-        for (int j = 0; j < n; ++j)
-          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
-    }
-    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
-  }
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++)
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
+  H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   // Copy A to C first (getri works in-place)
   // First, get the device pointer arrays from device memory
@@ -10091,7 +10016,7 @@ hipblasStatus_t hipblasZgetriBatched(hipblasHandle_t handle,
   std::vector<hipblasDoubleComplex*> C_ptrs_host(batchCount);
   hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(hipblasDoubleComplex*), hipMemcpyDeviceToHost);
   hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(hipblasDoubleComplex*), hipMemcpyDeviceToHost);
-  
+
   for (int i = 0; i < batchCount; i++) {
     hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(hipblasDoubleComplex), hipMemcpyDeviceToDevice);
   }
@@ -10159,25 +10084,8 @@ hipblasStatus_t hipblasZgetrsBatched(hipblasHandle_t handle,
   
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  {
-    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
-    if (ipiv != nullptr) {
-      std::vector<int> ipiv_all((size_t)batchCount * n);
-      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
-      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
-        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
-    } else {
-      // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int b = 0; b < batchCount; ++b)
-        for (int j = 0; j < n; ++j)
-          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
-    }
-    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
-  }
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++)
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
+  H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   H4I::MKLShim::Zgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (double _Complex**)A, &lda64, 
                             ipiv_ptrs_device, (double _Complex**)B, &ldb64, group_count, &group_size, 
@@ -10258,26 +10166,14 @@ hipblasStatus_t hipblasSgetrfBatched(hipblasHandle_t handle,
   // One contiguous int64 buffer for all batches' ipiv on the device
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  }
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Build the pivot pointer array on the device
+  H4I::MKLShim::make_ipiv_int64_ptr_list(ctxt, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   H4I::MKLShim::Sgetrf_batch(ctxt, &n64, &n64, (float**)A, &lda64, ipiv_ptrs_device, 
                             group_count, &group_size, scratch_device, scratch_size);
   
-  // Convert int64_t results back to int and copy to device memory
-  for (int i = 0; i < batchCount; i++) {
-    std::vector<int64_t> ipiv_temp(n);
-    hipMemcpy(ipiv_temp.data(), ipiv_ptrs_host[i], n * sizeof(int64_t), hipMemcpyDeviceToHost);
-    std::vector<int> ipiv_batch(n);
-    for (int j = 0; j < n; j++) {
-      ipiv_batch[j] = static_cast<int>(ipiv_temp[j]);
-    }
-    // Copy the converted results to device memory
-    hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
-  }
+  // Convert the int64 pivots back to int pivots on the device
+  H4I::MKLShim::convert_ipiv_to_int32(ctxt, ipiv64_device, ipiv, (int64_t)batchCount * n);
   hipFree(ipiv64_device);
 
   // Set info to 0 (success) for all batches - copy to device
@@ -10333,25 +10229,8 @@ hipblasStatus_t hipblasSgetriBatched(hipblasHandle_t handle,
   
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  {
-    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
-    if (ipiv != nullptr) {
-      std::vector<int> ipiv_all((size_t)batchCount * n);
-      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
-      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
-        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
-    } else {
-      // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int b = 0; b < batchCount; ++b)
-        for (int j = 0; j < n; ++j)
-          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
-    }
-    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
-  }
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++)
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
+  H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   // Copy A to C first (getri works in-place)
   // First, get the device pointer arrays from device memory
@@ -10359,7 +10238,7 @@ hipblasStatus_t hipblasSgetriBatched(hipblasHandle_t handle,
   std::vector<float*> C_ptrs_host(batchCount);
   hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(float*), hipMemcpyDeviceToHost);
   hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(float*), hipMemcpyDeviceToHost);
-  
+
   for (int i = 0; i < batchCount; i++) {
     hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(float), hipMemcpyDeviceToDevice);
   }
@@ -10427,25 +10306,8 @@ hipblasStatus_t hipblasSgetrsBatched(hipblasHandle_t handle,
   
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  {
-    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
-    if (ipiv != nullptr) {
-      std::vector<int> ipiv_all((size_t)batchCount * n);
-      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
-      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
-        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
-    } else {
-      // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int b = 0; b < batchCount; ++b)
-        for (int j = 0; j < n; ++j)
-          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
-    }
-    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
-  }
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++)
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
+  H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   H4I::MKLShim::Sgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (float**)A, &lda64, 
                             ipiv_ptrs_device, (float**)B, &ldb64, group_count, &group_size, 
@@ -10525,26 +10387,14 @@ hipblasStatus_t hipblasCgetrfBatched(hipblasHandle_t handle,
   // One contiguous int64 buffer for all batches' ipiv on the device
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++) {
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  }
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Build the pivot pointer array on the device
+  H4I::MKLShim::make_ipiv_int64_ptr_list(ctxt, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   H4I::MKLShim::Cgetrf_batch(ctxt, &n64, &n64, (float _Complex**)A, &lda64, ipiv_ptrs_device, 
                             group_count, &group_size, scratch_device, scratch_size);
   
-  // Convert int64_t results back to int and copy to device memory
-  for (int i = 0; i < batchCount; i++) {
-    std::vector<int64_t> ipiv_temp(n);
-    hipMemcpy(ipiv_temp.data(), ipiv_ptrs_host[i], n * sizeof(int64_t), hipMemcpyDeviceToHost);
-    std::vector<int> ipiv_batch(n);
-    for (int j = 0; j < n; j++) {
-      ipiv_batch[j] = static_cast<int>(ipiv_temp[j]);
-    }
-    // Copy the converted results to device memory
-    hipMemcpy(ipiv + i * n, ipiv_batch.data(), n * sizeof(int), hipMemcpyHostToDevice);
-  }
+  // Convert the int64 pivots back to int pivots on the device
+  H4I::MKLShim::convert_ipiv_to_int32(ctxt, ipiv64_device, ipiv, (int64_t)batchCount * n);
   hipFree(ipiv64_device);
 
   // Set info to 0 (success) for all batches - copy to device
@@ -10600,25 +10450,8 @@ hipblasStatus_t hipblasCgetriBatched(hipblasHandle_t handle,
   
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  {
-    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
-    if (ipiv != nullptr) {
-      std::vector<int> ipiv_all((size_t)batchCount * n);
-      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
-      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
-        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
-    } else {
-      // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int b = 0; b < batchCount; ++b)
-        for (int j = 0; j < n; ++j)
-          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
-    }
-    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
-  }
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++)
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
+  H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   // Copy A to C first (getri works in-place)
   // First, get the device pointer arrays from device memory
@@ -10626,7 +10459,7 @@ hipblasStatus_t hipblasCgetriBatched(hipblasHandle_t handle,
   std::vector<hipblasComplex*> C_ptrs_host(batchCount);
   hipMemcpy(A_ptrs_host.data(), A, batchCount * sizeof(hipblasComplex*), hipMemcpyDeviceToHost);
   hipMemcpy(C_ptrs_host.data(), C, batchCount * sizeof(hipblasComplex*), hipMemcpyDeviceToHost);
-  
+
   for (int i = 0; i < batchCount; i++) {
     hipMemcpy(C_ptrs_host[i], A_ptrs_host[i], n * ldc * sizeof(hipblasComplex), hipMemcpyDeviceToDevice);
   }
@@ -10694,25 +10527,8 @@ hipblasStatus_t hipblasCgetrsBatched(hipblasHandle_t handle,
   
   int64_t* ipiv64_device = nullptr;
   hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
-  {
-    std::vector<int64_t> ipiv64_host((size_t)batchCount * n);
-    if (ipiv != nullptr) {
-      std::vector<int> ipiv_all((size_t)batchCount * n);
-      hipMemcpy(ipiv_all.data(), ipiv, (size_t)batchCount * n * sizeof(int), hipMemcpyDeviceToHost);
-      for (size_t t = 0; t < (size_t)batchCount * n; ++t)
-        ipiv64_host[t] = static_cast<int64_t>(ipiv_all[t]);
-    } else {
-      // ipiv == nullptr, no-pivoting, generate an identity pivot
-      for (int b = 0; b < batchCount; ++b)
-        for (int j = 0; j < n; ++j)
-          ipiv64_host[(size_t)b * n + j] = static_cast<int64_t>(j + 1);
-    }
-    hipMemcpy(ipiv64_device, ipiv64_host.data(), (size_t)batchCount * n * sizeof(int64_t), hipMemcpyHostToDevice);
-  }
-  std::vector<int64_t*> ipiv_ptrs_host(batchCount);
-  for (int i = 0; i < batchCount; i++)
-    ipiv_ptrs_host[i] = ipiv64_device + (size_t)i * n;
-  hipMemcpy(ipiv_ptrs_device, ipiv_ptrs_host.data(), batchCount * sizeof(int64_t*), hipMemcpyHostToDevice);
+  // Convert the int pivot to int64 (or generate for nopivot) and build the pivot pointer array on the device
+  H4I::MKLShim::convert_ipiv_to_int64_and_make_ptr_list(ctxt, ipiv, ipiv64_device, ipiv_ptrs_device, n, batchCount);
   
   H4I::MKLShim::Cgetrs_batch(ctxt, &trans_array, &n64, &nrhs64, (float _Complex**)A, &lda64, 
                             ipiv_ptrs_device, (float _Complex**)B, &ldb64, group_count, &group_size, 
