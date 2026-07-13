@@ -10514,6 +10514,531 @@ hipblasStatus_t hipblasCgetrsBatched(hipblasHandle_t handle,
   HIPBLAS_CATCH("CGETRSBATCHED")
 }
 
+// LAPACK Strided Batched Functions
+//
+// These forward to the oneMKL strided-batch getrf/getrs entry points in MKLShim.
+// hipBLAS pivots are int32 with an arbitrary caller stride (strideP); oneMKL needs
+// int64 pivots, so we stage the pivots in a contiguous int64 device buffer
+// (per-vector stride n) and convert to/from the caller's int32 buffer honoring strideP.
+
+hipblasStatus_t hipblasSgetrfStridedBatched(hipblasHandle_t handle,
+                                           const int n,
+                                           float* A,
+                                           const int lda,
+                                           const hipblasStride strideA,
+                                           int* ipiv,
+                                           const hipblasStride strideP,
+                                           int* info,
+                                           const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || info == nullptr ||
+      n <= 0 || lda < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  int64_t n64 = n;
+  int64_t lda64 = lda;
+  int64_t strideA64 = strideA;
+  int64_t batch_size = batchCount;
+
+  // ipiv == nullptr: caller requested a factorization with no pivoting. use getrfnp
+  if (ipiv == nullptr) {
+    auto np_scratch_size = H4I::MKLShim::Sgetrfnp_strided_batch_ScPadSz(ctxt, n64, n64, lda64, strideA64, batch_size);
+    if (np_scratch_size < 0) {
+      return HIPBLAS_STATUS_INTERNAL_ERROR;
+    }
+    float* np_scratch_device = nullptr;
+    if (np_scratch_size > 0) {
+      hipMalloc(&np_scratch_device, np_scratch_size * sizeof(float));
+    }
+    H4I::MKLShim::Sgetrfnp_strided_batch(ctxt, n64, n64, A, lda64, strideA64, batch_size,
+                                         np_scratch_device, np_scratch_size);
+
+    std::vector<int> info_host(batchCount, 0);
+    hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+    if (np_scratch_device) {
+      hipFree(np_scratch_device);
+    }
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+
+  // Calculate scratchpad size (internal int64 pivots use a contiguous per-vector stride of n)
+  auto scratch_size = H4I::MKLShim::Sgetrf_strided_batch_ScPadSz(ctxt, n64, n64, lda64, strideA64, n64, batch_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+
+  float* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(float));
+  }
+
+  // Staging buffer for int64 pivots (contiguous, per-vector stride n)
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+
+  H4I::MKLShim::Sgetrf_strided_batch(ctxt, n64, n64, A, lda64, strideA64, ipiv64_device, n64, batch_size,
+                                     scratch_device, scratch_size);
+
+  // Scatter the int64 pivots back into the caller's int32 buffer honoring strideP
+  H4I::MKLShim::convert_ipiv_to_int32_strided(ctxt, ipiv64_device, ipiv, strideP, n, batchCount);
+  hipFree(ipiv64_device);
+
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+
+  HIPBLAS_CATCH("SGETRFSTRIDEDBATCHED")
+}
+
+hipblasStatus_t hipblasDgetrfStridedBatched(hipblasHandle_t handle,
+                                           const int n,
+                                           double* A,
+                                           const int lda,
+                                           const hipblasStride strideA,
+                                           int* ipiv,
+                                           const hipblasStride strideP,
+                                           int* info,
+                                           const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || info == nullptr ||
+      n <= 0 || lda < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  int64_t n64 = n;
+  int64_t lda64 = lda;
+  int64_t strideA64 = strideA;
+  int64_t batch_size = batchCount;
+
+  if (ipiv == nullptr) {
+    auto np_scratch_size = H4I::MKLShim::Dgetrfnp_strided_batch_ScPadSz(ctxt, n64, n64, lda64, strideA64, batch_size);
+    if (np_scratch_size < 0) {
+      return HIPBLAS_STATUS_INTERNAL_ERROR;
+    }
+    double* np_scratch_device = nullptr;
+    if (np_scratch_size > 0) {
+      hipMalloc(&np_scratch_device, np_scratch_size * sizeof(double));
+    }
+    H4I::MKLShim::Dgetrfnp_strided_batch(ctxt, n64, n64, A, lda64, strideA64, batch_size,
+                                         np_scratch_device, np_scratch_size);
+
+    std::vector<int> info_host(batchCount, 0);
+    hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+    if (np_scratch_device) {
+      hipFree(np_scratch_device);
+    }
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+
+  auto scratch_size = H4I::MKLShim::Dgetrf_strided_batch_ScPadSz(ctxt, n64, n64, lda64, strideA64, n64, batch_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+
+  double* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(double));
+  }
+
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+
+  H4I::MKLShim::Dgetrf_strided_batch(ctxt, n64, n64, A, lda64, strideA64, ipiv64_device, n64, batch_size,
+                                     scratch_device, scratch_size);
+
+  H4I::MKLShim::convert_ipiv_to_int32_strided(ctxt, ipiv64_device, ipiv, strideP, n, batchCount);
+  hipFree(ipiv64_device);
+
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+
+  HIPBLAS_CATCH("DGETRFSTRIDEDBATCHED")
+}
+
+hipblasStatus_t hipblasCgetrfStridedBatched(hipblasHandle_t handle,
+                                           const int n,
+                                           hipblasComplex* A,
+                                           const int lda,
+                                           const hipblasStride strideA,
+                                           int* ipiv,
+                                           const hipblasStride strideP,
+                                           int* info,
+                                           const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || info == nullptr ||
+      n <= 0 || lda < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  int64_t n64 = n;
+  int64_t lda64 = lda;
+  int64_t strideA64 = strideA;
+  int64_t batch_size = batchCount;
+
+  if (ipiv == nullptr) {
+    auto np_scratch_size = H4I::MKLShim::Cgetrfnp_strided_batch_ScPadSz(ctxt, n64, n64, lda64, strideA64, batch_size);
+    if (np_scratch_size < 0) {
+      return HIPBLAS_STATUS_INTERNAL_ERROR;
+    }
+    float _Complex* np_scratch_device = nullptr;
+    if (np_scratch_size > 0) {
+      hipMalloc(&np_scratch_device, np_scratch_size * sizeof(float _Complex));
+    }
+    H4I::MKLShim::Cgetrfnp_strided_batch(ctxt, n64, n64, (float _Complex*)A, lda64, strideA64, batch_size,
+                                         np_scratch_device, np_scratch_size);
+
+    std::vector<int> info_host(batchCount, 0);
+    hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+    if (np_scratch_device) {
+      hipFree(np_scratch_device);
+    }
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+
+  auto scratch_size = H4I::MKLShim::Cgetrf_strided_batch_ScPadSz(ctxt, n64, n64, lda64, strideA64, n64, batch_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+
+  float _Complex* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(float _Complex));
+  }
+
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+
+  H4I::MKLShim::Cgetrf_strided_batch(ctxt, n64, n64, (float _Complex*)A, lda64, strideA64, ipiv64_device, n64, batch_size,
+                                     scratch_device, scratch_size);
+
+  H4I::MKLShim::convert_ipiv_to_int32_strided(ctxt, ipiv64_device, ipiv, strideP, n, batchCount);
+  hipFree(ipiv64_device);
+
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+
+  HIPBLAS_CATCH("CGETRFSTRIDEDBATCHED")
+}
+
+hipblasStatus_t hipblasZgetrfStridedBatched(hipblasHandle_t handle,
+                                           const int n,
+                                           hipblasDoubleComplex* A,
+                                           const int lda,
+                                           const hipblasStride strideA,
+                                           int* ipiv,
+                                           const hipblasStride strideP,
+                                           int* info,
+                                           const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || info == nullptr ||
+      n <= 0 || lda < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  int64_t n64 = n;
+  int64_t lda64 = lda;
+  int64_t strideA64 = strideA;
+  int64_t batch_size = batchCount;
+
+  if (ipiv == nullptr) {
+    auto np_scratch_size = H4I::MKLShim::Zgetrfnp_strided_batch_ScPadSz(ctxt, n64, n64, lda64, strideA64, batch_size);
+    if (np_scratch_size < 0) {
+      return HIPBLAS_STATUS_INTERNAL_ERROR;
+    }
+    double _Complex* np_scratch_device = nullptr;
+    if (np_scratch_size > 0) {
+      hipMalloc(&np_scratch_device, np_scratch_size * sizeof(double _Complex));
+    }
+    H4I::MKLShim::Zgetrfnp_strided_batch(ctxt, n64, n64, (double _Complex*)A, lda64, strideA64, batch_size,
+                                         np_scratch_device, np_scratch_size);
+
+    std::vector<int> info_host(batchCount, 0);
+    hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+    if (np_scratch_device) {
+      hipFree(np_scratch_device);
+    }
+    return HIPBLAS_STATUS_SUCCESS;
+  }
+
+  auto scratch_size = H4I::MKLShim::Zgetrf_strided_batch_ScPadSz(ctxt, n64, n64, lda64, strideA64, n64, batch_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+
+  double _Complex* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(double _Complex));
+  }
+
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+
+  H4I::MKLShim::Zgetrf_strided_batch(ctxt, n64, n64, (double _Complex*)A, lda64, strideA64, ipiv64_device, n64, batch_size,
+                                     scratch_device, scratch_size);
+
+  H4I::MKLShim::convert_ipiv_to_int32_strided(ctxt, ipiv64_device, ipiv, strideP, n, batchCount);
+  hipFree(ipiv64_device);
+
+  std::vector<int> info_host(batchCount, 0);
+  hipMemcpy(info, info_host.data(), batchCount * sizeof(int), hipMemcpyHostToDevice);
+
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+
+  HIPBLAS_CATCH("ZGETRFSTRIDEDBATCHED")
+}
+
+hipblasStatus_t hipblasSgetrsStridedBatched(hipblasHandle_t handle,
+                                           const hipblasOperation_t trans,
+                                           const int n,
+                                           const int nrhs,
+                                           float* A,
+                                           const int lda,
+                                           const hipblasStride strideA,
+                                           const int* ipiv,
+                                           const hipblasStride strideP,
+                                           float* B,
+                                           const int ldb,
+                                           const hipblasStride strideB,
+                                           int* info,
+                                           const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || B == nullptr || info == nullptr ||
+      n <= 0 || nrhs <= 0 || lda < n || ldb < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  int64_t n64 = n;
+  int64_t nrhs64 = nrhs;
+  int64_t lda64 = lda;
+  int64_t strideA64 = strideA;
+  int64_t ldb64 = ldb;
+  int64_t strideB64 = strideB;
+  int64_t batch_size = batchCount;
+  H4I::MKLShim::onemklTranspose trans_conv = convert(trans);
+
+  auto scratch_size = H4I::MKLShim::Sgetrs_strided_batch_ScPadSz(ctxt, trans_conv, n64, nrhs64, lda64, strideA64,
+                                                                 n64, ldb64, strideB64, batch_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+
+  float* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(float));
+  }
+
+  // Stage caller int32 pivots (stride strideP) into contiguous int64 buffer (stride n).
+  // Handles ipiv == nullptr by generating the identity permutation.
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  H4I::MKLShim::convert_ipiv_to_int64_strided(ctxt, ipiv, strideP, ipiv64_device, n, batchCount);
+
+  H4I::MKLShim::Sgetrs_strided_batch(ctxt, trans_conv, n64, nrhs64, A, lda64, strideA64, ipiv64_device, n64,
+                                     B, ldb64, strideB64, batch_size, scratch_device, scratch_size);
+
+  *info = 0;
+
+  hipFree(ipiv64_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+
+  HIPBLAS_CATCH("SGETRSSTRIDEDBATCHED")
+}
+
+hipblasStatus_t hipblasDgetrsStridedBatched(hipblasHandle_t handle,
+                                           const hipblasOperation_t trans,
+                                           const int n,
+                                           const int nrhs,
+                                           double* A,
+                                           const int lda,
+                                           const hipblasStride strideA,
+                                           const int* ipiv,
+                                           const hipblasStride strideP,
+                                           double* B,
+                                           const int ldb,
+                                           const hipblasStride strideB,
+                                           int* info,
+                                           const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || B == nullptr || info == nullptr ||
+      n <= 0 || nrhs <= 0 || lda < n || ldb < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  int64_t n64 = n;
+  int64_t nrhs64 = nrhs;
+  int64_t lda64 = lda;
+  int64_t strideA64 = strideA;
+  int64_t ldb64 = ldb;
+  int64_t strideB64 = strideB;
+  int64_t batch_size = batchCount;
+  H4I::MKLShim::onemklTranspose trans_conv = convert(trans);
+
+  auto scratch_size = H4I::MKLShim::Dgetrs_strided_batch_ScPadSz(ctxt, trans_conv, n64, nrhs64, lda64, strideA64,
+                                                                 n64, ldb64, strideB64, batch_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+
+  double* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(double));
+  }
+
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  H4I::MKLShim::convert_ipiv_to_int64_strided(ctxt, ipiv, strideP, ipiv64_device, n, batchCount);
+
+  H4I::MKLShim::Dgetrs_strided_batch(ctxt, trans_conv, n64, nrhs64, A, lda64, strideA64, ipiv64_device, n64,
+                                     B, ldb64, strideB64, batch_size, scratch_device, scratch_size);
+
+  *info = 0;
+
+  hipFree(ipiv64_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+
+  HIPBLAS_CATCH("DGETRSSTRIDEDBATCHED")
+}
+
+hipblasStatus_t hipblasCgetrsStridedBatched(hipblasHandle_t handle,
+                                           const hipblasOperation_t trans,
+                                           const int n,
+                                           const int nrhs,
+                                           hipblasComplex* A,
+                                           const int lda,
+                                           const hipblasStride strideA,
+                                           const int* ipiv,
+                                           const hipblasStride strideP,
+                                           hipblasComplex* B,
+                                           const int ldb,
+                                           const hipblasStride strideB,
+                                           int* info,
+                                           const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || B == nullptr || info == nullptr ||
+      n <= 0 || nrhs <= 0 || lda < n || ldb < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  int64_t n64 = n;
+  int64_t nrhs64 = nrhs;
+  int64_t lda64 = lda;
+  int64_t strideA64 = strideA;
+  int64_t ldb64 = ldb;
+  int64_t strideB64 = strideB;
+  int64_t batch_size = batchCount;
+  H4I::MKLShim::onemklTranspose trans_conv = convert(trans);
+
+  auto scratch_size = H4I::MKLShim::Cgetrs_strided_batch_ScPadSz(ctxt, trans_conv, n64, nrhs64, lda64, strideA64,
+                                                                 n64, ldb64, strideB64, batch_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+
+  float _Complex* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(float _Complex));
+  }
+
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  H4I::MKLShim::convert_ipiv_to_int64_strided(ctxt, ipiv, strideP, ipiv64_device, n, batchCount);
+
+  H4I::MKLShim::Cgetrs_strided_batch(ctxt, trans_conv, n64, nrhs64, (float _Complex*)A, lda64, strideA64, ipiv64_device, n64,
+                                     (float _Complex*)B, ldb64, strideB64, batch_size, scratch_device, scratch_size);
+
+  *info = 0;
+
+  hipFree(ipiv64_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+
+  HIPBLAS_CATCH("CGETRSSTRIDEDBATCHED")
+}
+
+hipblasStatus_t hipblasZgetrsStridedBatched(hipblasHandle_t handle,
+                                           const hipblasOperation_t trans,
+                                           const int n,
+                                           const int nrhs,
+                                           hipblasDoubleComplex* A,
+                                           const int lda,
+                                           const hipblasStride strideA,
+                                           const int* ipiv,
+                                           const hipblasStride strideP,
+                                           hipblasDoubleComplex* B,
+                                           const int ldb,
+                                           const hipblasStride strideB,
+                                           int* info,
+                                           const int batchCount) {
+  HIPBLAS_TRY
+  if (handle == nullptr || A == nullptr || B == nullptr || info == nullptr ||
+      n <= 0 || nrhs <= 0 || lda < n || ldb < n || batchCount <= 0) {
+    return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+
+  int64_t n64 = n;
+  int64_t nrhs64 = nrhs;
+  int64_t lda64 = lda;
+  int64_t strideA64 = strideA;
+  int64_t ldb64 = ldb;
+  int64_t strideB64 = strideB;
+  int64_t batch_size = batchCount;
+  H4I::MKLShim::onemklTranspose trans_conv = convert(trans);
+
+  auto scratch_size = H4I::MKLShim::Zgetrs_strided_batch_ScPadSz(ctxt, trans_conv, n64, nrhs64, lda64, strideA64,
+                                                                 n64, ldb64, strideB64, batch_size);
+  if (scratch_size < 0) {
+    return HIPBLAS_STATUS_INTERNAL_ERROR;
+  }
+
+  double _Complex* scratch_device = nullptr;
+  if (scratch_size > 0) {
+    hipMalloc(&scratch_device, scratch_size * sizeof(double _Complex));
+  }
+
+  int64_t* ipiv64_device = nullptr;
+  hipMalloc(&ipiv64_device, (size_t)batchCount * n * sizeof(int64_t));
+  H4I::MKLShim::convert_ipiv_to_int64_strided(ctxt, ipiv, strideP, ipiv64_device, n, batchCount);
+
+  H4I::MKLShim::Zgetrs_strided_batch(ctxt, trans_conv, n64, nrhs64, (double _Complex*)A, lda64, strideA64, ipiv64_device, n64,
+                                     (double _Complex*)B, ldb64, strideB64, batch_size, scratch_device, scratch_size);
+
+  *info = 0;
+
+  hipFree(ipiv64_device);
+  if (scratch_device) {
+    hipFree(scratch_device);
+  }
+
+  HIPBLAS_CATCH("ZGETRSSTRIDEDBATCHED")
+}
+
 // Strided Batched GEMM function
 
 hipblasStatus_t hipblasSgemmStridedBatchedEx(hipblasHandle_t   handle,
