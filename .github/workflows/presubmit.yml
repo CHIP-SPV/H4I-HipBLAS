@@ -33,7 +33,7 @@ jobs:
             source /etc/profile.d/modules.sh
           fi
           module use /space/pvelesko/modulefiles
-          module load oneapi/2025.0.4 llvm/22.0-native level-zero/dgpu
+          module load oneapi/2025.1.1 llvm/22.0-native level-zero/dgpu
           module list
 
           # Build chipStar and H4I-MKLShim from source into a job-local prefix
