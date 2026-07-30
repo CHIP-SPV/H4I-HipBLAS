@@ -6,6 +6,7 @@
 #include "h4i/mklshim/mklshim.h"
 #include "h4i/mklshim/onemklblas.h"
 #include "h4i/hipblas/impl/util.h"
+#include <cstring>
 #include <vector>
 
 #define HIPBLAS_TRY \
@@ -9119,6 +9120,77 @@ hipblasStatus_t hipblasZgemm(hipblasHandle_t             handle,
   HIPBLAS_CATCH("GEMM")
 }
 
+// GemmEx scale factors point to a scalar of the *compute* type, not to a
+// float: HIPBLAS_R_16F means a half, HIPBLAS_R_16B a bfloat16, HIPBLAS_R_32I
+// an int32_t and HIPBLAS_R_64F a double.  Reading all of them as a float
+// reinterpreted whatever happened to follow the scalar in memory, which for
+// the half case typically produced an infinity in C.
+static size_t gemmExScalarSize(hipblasDatatype_t computeType) {
+    switch (computeType) {
+        case HIPBLAS_R_16F:
+        case HIPBLAS_R_16B:
+            return sizeof(uint16_t);
+        case HIPBLAS_R_64F:
+            return sizeof(double);
+        default:
+            return sizeof(float);
+    }
+}
+
+// Decode binary16 / bfloat16 bit patterns without a device compiler; this
+// translation unit is built with a plain host C++ compiler.
+static float halfBitsToFloat(uint16_t h) {
+    uint32_t sign = (uint32_t)(h & 0x8000u) << 16;
+    uint32_t exp  = (uint32_t)(h >> 10) & 0x1Fu;
+    uint32_t mant = (uint32_t)(h & 0x3FFu);
+    uint32_t bits;
+    if (exp == 0) {
+        if (mant == 0) {
+            bits = sign;                       // +/- zero
+        } else {                               // subnormal: renormalise
+            exp = 127 - 15 + 1;
+            while ((mant & 0x400u) == 0) { mant <<= 1; exp--; }
+            mant &= 0x3FFu;
+            bits = sign | (exp << 23) | (mant << 13);
+        }
+    } else if (exp == 31) {
+        bits = sign | 0x7F800000u | (mant << 13);   // inf / NaN
+    } else {
+        bits = sign | ((exp - 15 + 127) << 23) | (mant << 13);
+    }
+    float out;
+    memcpy(&out, &bits, sizeof(out));
+    return out;
+}
+
+static float bfloat16BitsToFloat(uint16_t b) {
+    uint32_t bits = (uint32_t)b << 16;
+    float out;
+    memcpy(&out, &bits, sizeof(out));
+    return out;
+}
+
+// Returns false when computeType has no single precision scale factor.
+static bool gemmExScalarToFloat(hipblasDatatype_t computeType, const void* scalar,
+                                float* out) {
+    switch (computeType) {
+        case HIPBLAS_R_16F:
+            *out = halfBitsToFloat(*(const uint16_t*)scalar);
+            return true;
+        case HIPBLAS_R_16B:
+            *out = bfloat16BitsToFloat(*(const uint16_t*)scalar);
+            return true;
+        case HIPBLAS_R_32I:
+            *out = (float)*(const int32_t*)scalar;
+            return true;
+        case HIPBLAS_R_32F:
+            *out = *(const float*)scalar;
+            return true;
+        default:
+            return false;
+    }
+}
+
 hipblasStatus_t hipblasGemmEx(hipblasHandle_t    handle,
                              hipblasOperation_t transa,
                              hipblasOperation_t transb,
@@ -9149,13 +9221,22 @@ hipblasStatus_t hipblasGemmEx(hipblasHandle_t    handle,
     hipblasGetPointerMode(handle, &pointerMode);
     bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
-    float h_alpha, h_beta;
+    const size_t scalarSize = gemmExScalarSize(compute_type);
+    alignas(8) unsigned char alphaStore[sizeof(double)];
+    alignas(8) unsigned char betaStore[sizeof(double)];
+    const void* alphaHost = alpha;
+    const void* betaHost = beta;
     if (is_dev_ptr) {
-        hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-        hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
-    } else {
-        h_alpha = *((float*)alpha);
-        h_beta = *((float*)beta);
+        hipMemcpy(alphaStore, alpha, scalarSize, hipMemcpyDefault);
+        hipMemcpy(betaStore, beta, scalarSize, hipMemcpyDefault);
+        alphaHost = alphaStore;
+        betaHost = betaStore;
+    }
+
+    float h_alpha, h_beta;
+    if (!gemmExScalarToFloat(compute_type, alphaHost, &h_alpha) ||
+        !gemmExScalarToFloat(compute_type, betaHost, &h_beta)) {
+        return HIPBLAS_STATUS_NOT_SUPPORTED;
     }
 
     H4I::MKLShim::sGemmEx(ctxt, convert(transa), convert(transb), m, n, k,
