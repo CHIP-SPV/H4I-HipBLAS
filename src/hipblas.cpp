@@ -1192,11 +1192,35 @@ hipblasStatus_t hipblasZcopyStridedBatched(hipblasHandle_t             handle,
                                            int                         batchCount) {
   return HIPBLAS_STATUS_NOT_SUPPORTED;
 }
-// Level-1 : dot (supported datatypes : float, double, complex float, complex double)
+// Level-1 : dot (supported datatypes : half, float, double, complex float, complex double)
 // Generic dot which can handle batched/stride/non-batched
 hipblasStatus_t hipblasHdot(hipblasHandle_t handle, int n, const hipblasHalf* x, int incx,
                             const hipblasHalf* y, int incy, hipblasHalf* result) {
-    return HIPBLAS_STATUS_NOT_SUPPORTED;
+  HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr || result == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  hipError_t hip_status;
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  hipblasHalf* dev_result = result;
+  if (!is_result_dev_ptr) {
+    hip_status = hipMalloc(&dev_result, sizeof(hipblasHalf));
+  }
+  // Accumulation happens in half, matching the storage type, because that is
+  // what oneMKL's half dot product provides.
+  H4I::MKLShim::hDot(ctxt, n, x, incx, y, incy, dev_result);
+
+  if (!is_result_dev_ptr) {
+      hip_status = hipMemcpy(result, dev_result, sizeof(hipblasHalf), hipMemcpyDefault);
+      hip_status = hipFree(dev_result);
+  }
+  HIPBLAS_CATCH("DOT")
 }
 
 hipblasStatus_t hipblasBfdot(hipblasHandle_t handle, int n, const hipblasBfloat16* x,
