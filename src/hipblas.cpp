@@ -1387,6 +1387,114 @@ hipblasStatus_t hipblasZdotu(hipblasHandle_t handle, int n, const hipblasDoubleC
   }
   HIPBLAS_CATCH("DOT")
 }
+
+// dot_ex
+// The MKL backend only provides uniform precision dot products, so the vector,
+// result and execution types must all agree.  Mixed precision requests (for
+// example half vectors accumulated in float) are reported as unsupported
+// rather than being quietly computed at a different precision than asked for.
+static hipblasDatatype_t toHipblasDatatype(hipDataType t) {
+    switch (t) {
+        case HIP_R_16F:  return HIPBLAS_R_16F;
+        case HIP_R_32F:  return HIPBLAS_R_32F;
+        case HIP_R_64F:  return HIPBLAS_R_64F;
+        case HIP_C_16F:  return HIPBLAS_C_16F;
+        case HIP_C_32F:  return HIPBLAS_C_32F;
+        case HIP_C_64F:  return HIPBLAS_C_64F;
+        case HIP_R_8I:   return HIPBLAS_R_8I;
+        case HIP_R_8U:   return HIPBLAS_R_8U;
+        case HIP_R_32I:  return HIPBLAS_R_32I;
+        case HIP_R_32U:  return HIPBLAS_R_32U;
+        case HIP_C_8I:   return HIPBLAS_C_8I;
+        case HIP_C_8U:   return HIPBLAS_C_8U;
+        case HIP_C_32I:  return HIPBLAS_C_32I;
+        case HIP_C_32U:  return HIPBLAS_C_32U;
+        case HIP_R_16BF: return HIPBLAS_R_16B;
+        case HIP_C_16BF: return HIPBLAS_C_16B;
+        default:         return HIPBLAS_DATATYPE_INVALID;
+    }
+}
+
+static hipblasStatus_t hipblasDotExImpl(hipblasHandle_t handle, int n,
+                                        const void* x, hipblasDatatype_t xType, int incx,
+                                        const void* y, hipblasDatatype_t yType, int incy,
+                                        void* result, hipblasDatatype_t resultType,
+                                        hipblasDatatype_t executionType, bool conjugate) {
+    if (handle == nullptr) {
+        return HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
+    }
+    if (xType != yType || xType != resultType || xType != executionType) {
+        return HIPBLAS_STATUS_NOT_SUPPORTED;
+    }
+    switch (xType) {
+        case HIPBLAS_R_16F:
+            return hipblasHdot(handle, n, (const hipblasHalf*)x, incx,
+                               (const hipblasHalf*)y, incy, (hipblasHalf*)result);
+        case HIPBLAS_R_32F:
+            return hipblasSdot(handle, n, (const float*)x, incx,
+                               (const float*)y, incy, (float*)result);
+        case HIPBLAS_R_64F:
+            return hipblasDdot(handle, n, (const double*)x, incx,
+                               (const double*)y, incy, (double*)result);
+        case HIPBLAS_C_32F:
+            return conjugate
+                ? hipblasCdotc(handle, n, (const hipblasComplex*)x, incx,
+                               (const hipblasComplex*)y, incy, (hipblasComplex*)result)
+                : hipblasCdotu(handle, n, (const hipblasComplex*)x, incx,
+                               (const hipblasComplex*)y, incy, (hipblasComplex*)result);
+        case HIPBLAS_C_64F:
+            return conjugate
+                ? hipblasZdotc(handle, n, (const hipblasDoubleComplex*)x, incx,
+                               (const hipblasDoubleComplex*)y, incy,
+                               (hipblasDoubleComplex*)result)
+                : hipblasZdotu(handle, n, (const hipblasDoubleComplex*)x, incx,
+                               (const hipblasDoubleComplex*)y, incy,
+                               (hipblasDoubleComplex*)result);
+        default:
+            return HIPBLAS_STATUS_NOT_SUPPORTED;
+    }
+}
+
+hipblasStatus_t hipblasDotEx(hipblasHandle_t handle, int n,
+                             const void* x, hipblasDatatype_t xType, int incx,
+                             const void* y, hipblasDatatype_t yType, int incy,
+                             void* result, hipblasDatatype_t resultType,
+                             hipblasDatatype_t executionType) {
+    return hipblasDotExImpl(handle, n, x, xType, incx, y, yType, incy, result,
+                            resultType, executionType, false);
+}
+
+hipblasStatus_t hipblasDotcEx(hipblasHandle_t handle, int n,
+                              const void* x, hipblasDatatype_t xType, int incx,
+                              const void* y, hipblasDatatype_t yType, int incy,
+                              void* result, hipblasDatatype_t resultType,
+                              hipblasDatatype_t executionType) {
+    return hipblasDotExImpl(handle, n, x, xType, incx, y, yType, incy, result,
+                            resultType, executionType, true);
+}
+
+hipblasStatus_t hipblasDotEx_v2(hipblasHandle_t handle, int n,
+                                const void* x, hipDataType xType, int incx,
+                                const void* y, hipDataType yType, int incy,
+                                void* result, hipDataType resultType,
+                                hipDataType executionType) {
+    return hipblasDotExImpl(handle, n, x, toHipblasDatatype(xType), incx,
+                            y, toHipblasDatatype(yType), incy, result,
+                            toHipblasDatatype(resultType),
+                            toHipblasDatatype(executionType), false);
+}
+
+hipblasStatus_t hipblasDotcEx_v2(hipblasHandle_t handle, int n,
+                                 const void* x, hipDataType xType, int incx,
+                                 const void* y, hipDataType yType, int incy,
+                                 void* result, hipDataType resultType,
+                                 hipDataType executionType) {
+    return hipblasDotExImpl(handle, n, x, toHipblasDatatype(xType), incx,
+                            y, toHipblasDatatype(yType), incy, result,
+                            toHipblasDatatype(resultType),
+                            toHipblasDatatype(executionType), true);
+}
+
 // dot_batched
 hipblasStatus_t hipblasHdotBatched(hipblasHandle_t          handle,
                                    int                      n,
