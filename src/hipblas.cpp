@@ -9233,14 +9233,28 @@ hipblasStatus_t hipblasGemmEx(hipblasHandle_t    handle,
         betaHost = betaStore;
     }
 
+    // A double precision scale factor cannot go through sGemmEx without losing
+    // precision, so double precision has its own backend entry point.
+    if (compute_type == HIPBLAS_R_64F) {
+        if (!H4I::MKLShim::dGemmEx(ctxt, convert(transa), convert(transb), m, n, k,
+                    *(const double*)alphaHost, A, convert(Atype), lda,
+                    B, convert(Btype), ldb, *(const double*)betaHost,
+                    C, convert(Ctype), ldc)) {
+            return HIPBLAS_STATUS_NOT_SUPPORTED;
+        }
+        return HIPBLAS_STATUS_SUCCESS;
+    }
+
     float h_alpha, h_beta;
     if (!gemmExScalarToFloat(compute_type, alphaHost, &h_alpha) ||
         !gemmExScalarToFloat(compute_type, betaHost, &h_beta)) {
         return HIPBLAS_STATUS_NOT_SUPPORTED;
     }
 
-    H4I::MKLShim::sGemmEx(ctxt, convert(transa), convert(transb), m, n, k,
-                h_alpha, A, convert(Atype), lda, B, convert(Btype), ldb, h_beta, C, convert(Ctype), ldc);
+    if (!H4I::MKLShim::sGemmEx(ctxt, convert(transa), convert(transb), m, n, k,
+                h_alpha, A, convert(Atype), lda, B, convert(Btype), ldb, h_beta, C, convert(Ctype), ldc)) {
+        return HIPBLAS_STATUS_NOT_SUPPORTED;
+    }
     HIPBLAS_CATCH("GEMM-Ex")
 }
 
