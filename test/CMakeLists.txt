@@ -32,3 +32,25 @@ add_executable(hipblas_blas1_64_test blas1_64_test.cpp)
 target_link_libraries(hipblas_blas1_64_test PRIVATE hipblas hip::host)
 target_include_directories(hipblas_blas1_64_test PRIVATE ${CMAKE_BINARY_DIR}/include)
 add_test(NAME h4i-hipblas_blas1_64_test COMMAND hipblas_blas1_64_test)
+
+# GemmEx / DotEx mixed precision correctness tests.  Every GPU result is
+# validated against classic CBLAS running on the CPU, so this test also needs
+# the host MKL libraries.  MKL is already available here because
+# MKLShimConfig.cmake pulls it in as a dependency.
+#
+# The sequential CPU layer is located and linked explicitly rather than via the
+# umbrella MKL::MKL target: that target carries Intel OpenMP flags (-fiopenmp)
+# which the plain clang++ used to build this project does not accept, and a
+# scalar CPU reference has no use for threading anyway.
+get_filename_component(H4I_MKL_LIB_DIR "${MKL_DIR}/../.." ABSOLUTE)
+find_library(H4I_MKL_INTERFACE_LIB mkl_intel_ilp64 HINTS ${H4I_MKL_LIB_DIR} REQUIRED)
+find_library(H4I_MKL_THREADING_LIB mkl_sequential   HINTS ${H4I_MKL_LIB_DIR} REQUIRED)
+find_library(H4I_MKL_CORE_LIB      mkl_core         HINTS ${H4I_MKL_LIB_DIR} REQUIRED)
+
+add_executable(hipblas_gemmex_dotex_correctness_test gemmex_dotex_correctness_test.cpp)
+target_link_libraries(hipblas_gemmex_dotex_correctness_test PRIVATE hipblas hip::host
+                      ${H4I_MKL_INTERFACE_LIB} ${H4I_MKL_THREADING_LIB} ${H4I_MKL_CORE_LIB})
+target_compile_definitions(hipblas_gemmex_dotex_correctness_test PRIVATE MKL_ILP64)
+target_include_directories(hipblas_gemmex_dotex_correctness_test PRIVATE
+                           ${CMAKE_BINARY_DIR}/include ${MKL_INCLUDE})
+add_test(NAME h4i-hipblas_gemmex_dotex_correctness_test COMMAND hipblas_gemmex_dotex_correctness_test)

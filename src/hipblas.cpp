@@ -6,6 +6,7 @@
 #include "h4i/mklshim/mklshim.h"
 #include "h4i/mklshim/onemklblas.h"
 #include "h4i/hipblas/impl/util.h"
+#include <cstring>
 #include <vector>
 
 #define HIPBLAS_TRY \
@@ -1192,11 +1193,35 @@ hipblasStatus_t hipblasZcopyStridedBatched(hipblasHandle_t             handle,
                                            int                         batchCount) {
   return HIPBLAS_STATUS_NOT_SUPPORTED;
 }
-// Level-1 : dot (supported datatypes : float, double, complex float, complex double)
+// Level-1 : dot (supported datatypes : half, float, double, complex float, complex double)
 // Generic dot which can handle batched/stride/non-batched
 hipblasStatus_t hipblasHdot(hipblasHandle_t handle, int n, const hipblasHalf* x, int incx,
                             const hipblasHalf* y, int incy, hipblasHalf* result) {
-    return HIPBLAS_STATUS_NOT_SUPPORTED;
+  HIPBLAS_TRY
+  // error checks
+  if (handle == nullptr || x == nullptr || y == nullptr || result == nullptr ||
+      incx <= 0 || incy <= 0 || n <= 0) {
+      return HIPBLAS_STATUS_INVALID_VALUE;
+  }
+  auto* ctxt = static_cast<H4I::MKLShim::Context*>(handle);
+  hipError_t hip_status;
+  hipblasPointerMode_t pointerMode;
+  hipblasGetPointerMode(handle, &pointerMode);
+  bool is_result_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
+
+  hipblasHalf* dev_result = result;
+  if (!is_result_dev_ptr) {
+    hip_status = hipMalloc(&dev_result, sizeof(hipblasHalf));
+  }
+  // Accumulation happens in half, matching the storage type, because that is
+  // what oneMKL's half dot product provides.
+  H4I::MKLShim::hDot(ctxt, n, x, incx, y, incy, dev_result);
+
+  if (!is_result_dev_ptr) {
+      hip_status = hipMemcpy(result, dev_result, sizeof(hipblasHalf), hipMemcpyDefault);
+      hip_status = hipFree(dev_result);
+  }
+  HIPBLAS_CATCH("DOT")
 }
 
 hipblasStatus_t hipblasBfdot(hipblasHandle_t handle, int n, const hipblasBfloat16* x,
@@ -1363,6 +1388,114 @@ hipblasStatus_t hipblasZdotu(hipblasHandle_t handle, int n, const hipblasDoubleC
   }
   HIPBLAS_CATCH("DOT")
 }
+
+// dot_ex
+// The MKL backend only provides uniform precision dot products, so the vector,
+// result and execution types must all agree.  Mixed precision requests (for
+// example half vectors accumulated in float) are reported as unsupported
+// rather than being quietly computed at a different precision than asked for.
+static hipblasDatatype_t toHipblasDatatype(hipDataType t) {
+    switch (t) {
+        case HIP_R_16F:  return HIPBLAS_R_16F;
+        case HIP_R_32F:  return HIPBLAS_R_32F;
+        case HIP_R_64F:  return HIPBLAS_R_64F;
+        case HIP_C_16F:  return HIPBLAS_C_16F;
+        case HIP_C_32F:  return HIPBLAS_C_32F;
+        case HIP_C_64F:  return HIPBLAS_C_64F;
+        case HIP_R_8I:   return HIPBLAS_R_8I;
+        case HIP_R_8U:   return HIPBLAS_R_8U;
+        case HIP_R_32I:  return HIPBLAS_R_32I;
+        case HIP_R_32U:  return HIPBLAS_R_32U;
+        case HIP_C_8I:   return HIPBLAS_C_8I;
+        case HIP_C_8U:   return HIPBLAS_C_8U;
+        case HIP_C_32I:  return HIPBLAS_C_32I;
+        case HIP_C_32U:  return HIPBLAS_C_32U;
+        case HIP_R_16BF: return HIPBLAS_R_16B;
+        case HIP_C_16BF: return HIPBLAS_C_16B;
+        default:         return HIPBLAS_DATATYPE_INVALID;
+    }
+}
+
+static hipblasStatus_t hipblasDotExImpl(hipblasHandle_t handle, int n,
+                                        const void* x, hipblasDatatype_t xType, int incx,
+                                        const void* y, hipblasDatatype_t yType, int incy,
+                                        void* result, hipblasDatatype_t resultType,
+                                        hipblasDatatype_t executionType, bool conjugate) {
+    if (handle == nullptr) {
+        return HIPBLAS_STATUS_HANDLE_IS_NULLPTR;
+    }
+    if (xType != yType || xType != resultType || xType != executionType) {
+        return HIPBLAS_STATUS_NOT_SUPPORTED;
+    }
+    switch (xType) {
+        case HIPBLAS_R_16F:
+            return hipblasHdot(handle, n, (const hipblasHalf*)x, incx,
+                               (const hipblasHalf*)y, incy, (hipblasHalf*)result);
+        case HIPBLAS_R_32F:
+            return hipblasSdot(handle, n, (const float*)x, incx,
+                               (const float*)y, incy, (float*)result);
+        case HIPBLAS_R_64F:
+            return hipblasDdot(handle, n, (const double*)x, incx,
+                               (const double*)y, incy, (double*)result);
+        case HIPBLAS_C_32F:
+            return conjugate
+                ? hipblasCdotc(handle, n, (const hipblasComplex*)x, incx,
+                               (const hipblasComplex*)y, incy, (hipblasComplex*)result)
+                : hipblasCdotu(handle, n, (const hipblasComplex*)x, incx,
+                               (const hipblasComplex*)y, incy, (hipblasComplex*)result);
+        case HIPBLAS_C_64F:
+            return conjugate
+                ? hipblasZdotc(handle, n, (const hipblasDoubleComplex*)x, incx,
+                               (const hipblasDoubleComplex*)y, incy,
+                               (hipblasDoubleComplex*)result)
+                : hipblasZdotu(handle, n, (const hipblasDoubleComplex*)x, incx,
+                               (const hipblasDoubleComplex*)y, incy,
+                               (hipblasDoubleComplex*)result);
+        default:
+            return HIPBLAS_STATUS_NOT_SUPPORTED;
+    }
+}
+
+hipblasStatus_t hipblasDotEx(hipblasHandle_t handle, int n,
+                             const void* x, hipblasDatatype_t xType, int incx,
+                             const void* y, hipblasDatatype_t yType, int incy,
+                             void* result, hipblasDatatype_t resultType,
+                             hipblasDatatype_t executionType) {
+    return hipblasDotExImpl(handle, n, x, xType, incx, y, yType, incy, result,
+                            resultType, executionType, false);
+}
+
+hipblasStatus_t hipblasDotcEx(hipblasHandle_t handle, int n,
+                              const void* x, hipblasDatatype_t xType, int incx,
+                              const void* y, hipblasDatatype_t yType, int incy,
+                              void* result, hipblasDatatype_t resultType,
+                              hipblasDatatype_t executionType) {
+    return hipblasDotExImpl(handle, n, x, xType, incx, y, yType, incy, result,
+                            resultType, executionType, true);
+}
+
+hipblasStatus_t hipblasDotEx_v2(hipblasHandle_t handle, int n,
+                                const void* x, hipDataType xType, int incx,
+                                const void* y, hipDataType yType, int incy,
+                                void* result, hipDataType resultType,
+                                hipDataType executionType) {
+    return hipblasDotExImpl(handle, n, x, toHipblasDatatype(xType), incx,
+                            y, toHipblasDatatype(yType), incy, result,
+                            toHipblasDatatype(resultType),
+                            toHipblasDatatype(executionType), false);
+}
+
+hipblasStatus_t hipblasDotcEx_v2(hipblasHandle_t handle, int n,
+                                 const void* x, hipDataType xType, int incx,
+                                 const void* y, hipDataType yType, int incy,
+                                 void* result, hipDataType resultType,
+                                 hipDataType executionType) {
+    return hipblasDotExImpl(handle, n, x, toHipblasDatatype(xType), incx,
+                            y, toHipblasDatatype(yType), incy, result,
+                            toHipblasDatatype(resultType),
+                            toHipblasDatatype(executionType), true);
+}
+
 // dot_batched
 hipblasStatus_t hipblasHdotBatched(hipblasHandle_t          handle,
                                    int                      n,
@@ -8987,6 +9120,77 @@ hipblasStatus_t hipblasZgemm(hipblasHandle_t             handle,
   HIPBLAS_CATCH("GEMM")
 }
 
+// GemmEx scale factors point to a scalar of the *compute* type, not to a
+// float: HIPBLAS_R_16F means a half, HIPBLAS_R_16B a bfloat16, HIPBLAS_R_32I
+// an int32_t and HIPBLAS_R_64F a double.  Reading all of them as a float
+// reinterpreted whatever happened to follow the scalar in memory, which for
+// the half case typically produced an infinity in C.
+static size_t gemmExScalarSize(hipblasDatatype_t computeType) {
+    switch (computeType) {
+        case HIPBLAS_R_16F:
+        case HIPBLAS_R_16B:
+            return sizeof(uint16_t);
+        case HIPBLAS_R_64F:
+            return sizeof(double);
+        default:
+            return sizeof(float);
+    }
+}
+
+// Decode binary16 / bfloat16 bit patterns without a device compiler; this
+// translation unit is built with a plain host C++ compiler.
+static float halfBitsToFloat(uint16_t h) {
+    uint32_t sign = (uint32_t)(h & 0x8000u) << 16;
+    uint32_t exp  = (uint32_t)(h >> 10) & 0x1Fu;
+    uint32_t mant = (uint32_t)(h & 0x3FFu);
+    uint32_t bits;
+    if (exp == 0) {
+        if (mant == 0) {
+            bits = sign;                       // +/- zero
+        } else {                               // subnormal: renormalise
+            exp = 127 - 15 + 1;
+            while ((mant & 0x400u) == 0) { mant <<= 1; exp--; }
+            mant &= 0x3FFu;
+            bits = sign | (exp << 23) | (mant << 13);
+        }
+    } else if (exp == 31) {
+        bits = sign | 0x7F800000u | (mant << 13);   // inf / NaN
+    } else {
+        bits = sign | ((exp - 15 + 127) << 23) | (mant << 13);
+    }
+    float out;
+    memcpy(&out, &bits, sizeof(out));
+    return out;
+}
+
+static float bfloat16BitsToFloat(uint16_t b) {
+    uint32_t bits = (uint32_t)b << 16;
+    float out;
+    memcpy(&out, &bits, sizeof(out));
+    return out;
+}
+
+// Returns false when computeType has no single precision scale factor.
+static bool gemmExScalarToFloat(hipblasDatatype_t computeType, const void* scalar,
+                                float* out) {
+    switch (computeType) {
+        case HIPBLAS_R_16F:
+            *out = halfBitsToFloat(*(const uint16_t*)scalar);
+            return true;
+        case HIPBLAS_R_16B:
+            *out = bfloat16BitsToFloat(*(const uint16_t*)scalar);
+            return true;
+        case HIPBLAS_R_32I:
+            *out = (float)*(const int32_t*)scalar;
+            return true;
+        case HIPBLAS_R_32F:
+            *out = *(const float*)scalar;
+            return true;
+        default:
+            return false;
+    }
+}
+
 hipblasStatus_t hipblasGemmEx(hipblasHandle_t    handle,
                              hipblasOperation_t transa,
                              hipblasOperation_t transb,
@@ -9017,17 +9221,40 @@ hipblasStatus_t hipblasGemmEx(hipblasHandle_t    handle,
     hipblasGetPointerMode(handle, &pointerMode);
     bool is_dev_ptr = (pointerMode == HIPBLAS_POINTER_MODE_DEVICE);
 
-    float h_alpha, h_beta;
+    const size_t scalarSize = gemmExScalarSize(compute_type);
+    alignas(8) unsigned char alphaStore[sizeof(double)];
+    alignas(8) unsigned char betaStore[sizeof(double)];
+    const void* alphaHost = alpha;
+    const void* betaHost = beta;
     if (is_dev_ptr) {
-        hipMemcpy(&h_alpha, alpha, sizeof(float), hipMemcpyDefault);
-        hipMemcpy(&h_beta, beta, sizeof(float), hipMemcpyDefault);
-    } else {
-        h_alpha = *((float*)alpha);
-        h_beta = *((float*)beta);
+        hipMemcpy(alphaStore, alpha, scalarSize, hipMemcpyDefault);
+        hipMemcpy(betaStore, beta, scalarSize, hipMemcpyDefault);
+        alphaHost = alphaStore;
+        betaHost = betaStore;
     }
 
-    H4I::MKLShim::sGemmEx(ctxt, convert(transa), convert(transb), m, n, k,
-                h_alpha, A, convert(Atype), lda, B, convert(Btype), ldb, h_beta, C, convert(Ctype), ldc);
+    // A double precision scale factor cannot go through sGemmEx without losing
+    // precision, so double precision has its own backend entry point.
+    if (compute_type == HIPBLAS_R_64F) {
+        if (!H4I::MKLShim::dGemmEx(ctxt, convert(transa), convert(transb), m, n, k,
+                    *(const double*)alphaHost, A, convert(Atype), lda,
+                    B, convert(Btype), ldb, *(const double*)betaHost,
+                    C, convert(Ctype), ldc)) {
+            return HIPBLAS_STATUS_NOT_SUPPORTED;
+        }
+        return HIPBLAS_STATUS_SUCCESS;
+    }
+
+    float h_alpha, h_beta;
+    if (!gemmExScalarToFloat(compute_type, alphaHost, &h_alpha) ||
+        !gemmExScalarToFloat(compute_type, betaHost, &h_beta)) {
+        return HIPBLAS_STATUS_NOT_SUPPORTED;
+    }
+
+    if (!H4I::MKLShim::sGemmEx(ctxt, convert(transa), convert(transb), m, n, k,
+                h_alpha, A, convert(Atype), lda, B, convert(Btype), ldb, h_beta, C, convert(Ctype), ldc)) {
+        return HIPBLAS_STATUS_NOT_SUPPORTED;
+    }
     HIPBLAS_CATCH("GEMM-Ex")
 }
 
